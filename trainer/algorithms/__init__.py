@@ -1,0 +1,4 @@
+from .mixed_newton_damped import train_mixed_newton_damped
+from .mixed_newton_levenb_marq import train_mixed_newton_levenb_marq
+from .sgd_auto import train_sgd_auto
+from .sgd_manual import train_sgd_manual
