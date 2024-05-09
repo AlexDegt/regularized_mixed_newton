@@ -18,7 +18,7 @@ BatchTensorType = Callable[[Tensor], Tuple[Tensor, ...]]
 
 def train_mixed_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderType, validate_dataset: DataLoaderType, 
                                    test_dataset: DataLoaderType, loss_fn: LossFnType, quality_criterion: LossFnType, 
-                                   batch_to_tensors: BatchTensorType, chunk_size: OptionalInt = None, chunk_overlap: OptionalInt = None, 
+                                   batch_to_tensors: BatchTensorType, chunk_num: OptionalInt = None, 
                                    save_path: OptionalStr = None, exp_name: OptionalStr = None, save_every: OptionalInt = None, 
                                    save_signals: bool = False, weight_names: StrOrList = None):
     """
@@ -60,11 +60,7 @@ def train_mixed_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderTy
         batch_to_tensors (Callable): Function which acquires signal batch as an input and returns tuple of tensors, where
             the first tensor corresponds to model input, the second one - to the target signal. This function is used to
             obtain differentiable model output tensor to calculate jacobian.
-        chunk_size (int, optional): The value that shows the sizes to chunk samples on. Typically batch has following dimensions:
-            [batch_size, 2, sample_size], where second dimension corresponds to input/target. Function divides samples
-            into chunks with chunk_size size to calculate parameter step on them to save device memory. Defaults to "None".
-        chunk_overlap (int, optional): The number of overlapped samples between 2 chunks. If chunk_overlap is None, then it
-            is set to 0. Defaults to "None".
+        chunk_num (int, optional): The number of chunks in dataset. Defaults to "None".
         save_path (str, optional): Folder path to save function product. Defaults to "None".
         exp_name (str, optional): Name of simulation, which is reflected in function product names. Defaults to "None".
         save_every (int, optional): The number which reflects following: the results would be saved every save_every epochs.
@@ -127,53 +123,64 @@ def train_mixed_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderTy
             if type(loss_val) == torch.Tensor:
                 loss_val = loss_val.item()
 
-            hess, grad = SICOracle.direction_through_jacobian(batch, batch_to_tensors, chunk_size=chunk_size,
-                                                              chunk_overlap=chunk_overlap, weight_names=weight_names)
+            delta_hess, delta_grad = SICOracle.direction_through_jacobian(batch, batch_to_tensors, weight_names=weight_names)
+            if j % chunk_num == 0:
+                hess = delta_hess
+                grad = delta_grad
+            else:
+                hess += delta_hess
+                grad += delta_grad
+            delta_hess.detach()
+            delta_grad.detach()
+            del delta_hess, delta_grad
                 
-            maxH = hess.abs().max().item()
-            regul = torch.eye(hess.size()[0], device=hess.device)
-            hess_cond = torch.linalg.cond(hess).item()
+        maxH = hess.abs().max().item()
+        regul = torch.eye(hess.size()[0], device=hess.device)
+        hess_cond = torch.linalg.cond(hess).item()
 
-            flag = 1
-            while flag:
-                hess_inv = torch.linalg.pinv(hess + alpha*maxH*regul, rcond=1e-40, hermitian=True)
-                direction = -1. * hess_inv @ grad      
-                x = SICOracle.get_flat_params(name_list=weight_names)
-                curr_params = x + mu * direction
-                SICOracle.set_flat_params(curr_params, name_list=weight_names)
-                tmp_loss_val = SICOracle.loss_function_val(batch).item()
-                tmp_criterion_val = quality_criterion(model, batch)
-                if tmp_criterion_val <= criterion_val_train + eps:
-                    flag = 0
-                    alpha /= 3
-                else:
-                    SICOracle.set_flat_params(x, name_list=weight_names)
-                    alpha *= 1.1
-                    if epoch % print_every == 0:
-                        print(f"Deverges, epoch is {epoch + 1}, quality_criterion_train = {quality_criterion(model, batch):.8f} dB," + \
-                              f"stepsize = {mu:.6e}, reg_param = {alpha:.4e}")
-
-            del hess_inv, hess
-
-            lrs.append(mu)
-            lambda_curve.append(alpha)
-            delta_criterion = abs(criterion_val_train - tmp_criterion_val)
-            loss_val = tmp_loss_val
-            criterion_val_train = tmp_criterion_val
-
-            grad_norm = torch.norm(grad).item()
-            grad_norm_curve.append(grad_norm)
-            weights_norm_curve.append(torch.norm(curr_params).item())
-
-            if grad_norm < min_grad_norm:
-                grad_converge_flag += 1
+        flag = 1
+        while flag:
+            hess_inv = torch.linalg.pinv(hess + alpha*maxH*regul, rcond=1e-40, hermitian=True)
+            direction = -1. * hess_inv @ grad      
+            x = SICOracle.get_flat_params(name_list=weight_names)
+            curr_params = x + mu * direction
+            SICOracle.set_flat_params(curr_params, name_list=weight_names)
+            tmp_loss_val = SICOracle.loss_function_val(batch).item()
+            tmp_criterion_val = quality_criterion(model, batch)
+            if tmp_criterion_val <= criterion_val_train + eps:
+                flag = 0
+                alpha /= 3
             else:
-                grad_converge_flag = 0
+                SICOracle.set_flat_params(x, name_list=weight_names)
+                alpha *= 1.1
+                if epoch % print_every == 0:
+                    print(f"Deverges, epoch is {epoch + 1}, quality_criterion_train = {quality_criterion(model, batch):.8f} dB," + \
+                            f"stepsize = {mu:.6e}, reg_param = {alpha:.4e}")
 
-            if delta_criterion < min_delta_criterion:
-                converge_flag += 1
-            else:
-                converge_flag = 0
+        del hess_inv, hess
+
+        lrs.append(mu)
+        lambda_curve.append(alpha)
+        delta_criterion = abs(criterion_val_train - tmp_criterion_val)
+        loss_val = tmp_loss_val
+        criterion_val_train = tmp_criterion_val
+
+        grad_norm = torch.norm(grad).item()
+        del grad
+        torch.cuda.empty_cache()
+
+        grad_norm_curve.append(grad_norm)
+        weights_norm_curve.append(torch.norm(curr_params).item())
+
+        if grad_norm < min_grad_norm:
+            grad_converge_flag += 1
+        else:
+            grad_converge_flag = 0
+
+        if delta_criterion < min_delta_criterion:
+            converge_flag += 1
+        else:
+            converge_flag = 0
 
         with torch.no_grad():
 
