@@ -409,7 +409,7 @@ class Oracle(object):
     @torch.enable_grad()
     def hessian(self, signal_batch: BatchType, weight_names: StrOrList = None, compute_fn_val: bool = False,
                 outer_jacobian_strategy: str = "reverse-mode", return_full_wirtinger_derivative: bool = False,
-                idxs: OptionalTensor = None) -> DerRetType:
+                idxs: OptionalTensor = None, return_for_cuvic_newton = True) -> DerRetType:
         """
         This method computes hessian value of the loss function and optionally returns loss function value
         as nondifferentiable scalar. The hessian is computed using torch.autograd.functional.hessian function. This method
@@ -471,8 +471,13 @@ class Oracle(object):
                                   for row, h_row in enumerate(H_res[:num_real_params])), dim=0)
             H_res_yx = torch.cat(tuple(torch.cat(_reshape_param_tensor_tuple(row, h_row[:num_real_params]), dim=1)\
                                   for row, h_row in enumerate(H_res[num_real_params:])), dim=0)
-            H_res_yy = torch.cat(tuple(torch.cat(_reshape_param_tensor_tuple(row, h_row[num_real_params:]), dim=1)\
-                                  for row, h_row in enumerate(H_res[num_real_params:])), dim=0)
+            if return_for_cubic_newton:
+                H = (2 * H_res_xx + 1.0j * (H_res_yx - H_res_xy)) / 4.0
+                if idxs is not None:
+                    H = H[idxs[:, None], idxs]
+            else:
+                H_res_yy = torch.cat(tuple(torch.cat(_reshape_param_tensor_tuple(row, h_row[num_real_params:]), dim=1) \
+                                           for row, h_row in enumerate(H_res[num_real_params:])), dim=0)
             if return_full_wirtinger_derivative:
                 H_z_z = (H_res_xx - H_res_yy - 1.j * (H_res_yx + H_res_xy)) / 4.
                 H_z_z_conj = (H_res_xx + H_res_yy + 1.j * (H_res_xy - H_res_yx)) / 4.
@@ -485,7 +490,7 @@ class Oracle(object):
                     H = torch.cat((torch.cat((H_z_z[idxs[:, None], idxs], H_z_z_conj[idxs[:, None], idxs]), dim=1),
                                    torch.cat((H_z_conj_z[idxs[:, None], idxs], H_z_conj_z_conj[idxs[:, None], idxs]), dim=1)),
                                   dim=0)
-            else:
+            elif not return_for_cubic_newton:
                 if idxs is None:
                     H = (H_res_xx + H_res_yy + 1.j * (H_res_yx - H_res_xy)) / 4.
                 else:
