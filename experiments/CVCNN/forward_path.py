@@ -11,15 +11,15 @@ from scipy.io import loadmat
 from model import CVCNN
 
 # Determine experiment name and create its directory
-exp_name = "mnm_damped_layers_4_channels_5_ker_size_5_act_sigmoid"
-# exp_name = "test"
+# exp_name = "mnm_damped_layers_4_channels_5_ker_size_5_act_sigmoid"
+exp_name = "test"
 
 add_folder = os.path.join("")
 curr_path = os.getcwd()
 load_path = os.path.join(curr_path, add_folder, exp_name)
 
-# device = "cuda:0"
-device = "cpu"
+device = "cuda:0"
+# device = "cpu"
 seed = 964
 torch.manual_seed(seed)
 random.seed(seed)
@@ -37,22 +37,22 @@ mat = loadmat("../../data/data2d.mat")
 dtype = torch.complex128
 
 # Number of output channels of each convolutional layer.
-out_channels = [5, 5, 5, 1]
+out_channels = [3, 3, 3, 1]
 # Kernel size for each layer. Kernel sizes must be odd integer numbers.
 # Otherwise input sequence length will be reduced by 1 (for case of mode == 'same' in nn.Conv1d).
-kernel_size = [5, 5, 5, 5]
+kernel_size = [3, 3, 3, 3]
 # Activation functions are listed in /MIPT_opt/model/layers/activation.py
 # Don`t forget that model output must be holomorphic w.r.t. model parameters
 activate = ['sigmoid', 'sigmoid', 'sigmoid', 'sigmoid']
 # activate = ['ctanh', 'ctanh', 'ctanh', 'ctanh']
 p_drop = list(np.zeros_like(out_channels))
 delays = [[0]]
-slot_num = 1
+slot_num = 10
 # Indices of slots which are chosen to be included in train/test set (must be of a range type).
 # Elements of train_slots_ind, test_slots_ind must be higher than 0 and lower, than slot_num
 # In full-batch mode train, validation and test dataset are the same.
 # In mini-batch mode validation and test dataset are the same.
-train_slots_ind, validat_slots_ind, test_slots_ind = range(1), range(1), range(1)
+train_slots_ind, validat_slots_ind, test_slots_ind = range(8), range(8), range(8, 10)
 delay_d = 0
 # batch_size == None is equal to batch_size = 1.
 # block_size == None is equal to block_size = signal length. 

@@ -15,9 +15,9 @@ OptionalBatchTensor = Union[Callable[[Tensor], Tuple[Tensor, ...]], None]
 
 def train(model: nn.Module, train_dataset: DataLoaderType, loss_fn: LossFnType, quality_criterion: LossFnType, 
           config_train: dict, batch_to_tensors: OptionalBatchTensor = None, validate_dataset: OptionalDataLoader = None, 
-          test_dataset: OptionalDataLoader = None, train_type: OptionalStr = None, chunk_size: OptionalInt = None, 
+          test_dataset: OptionalDataLoader = None, train_type: OptionalStr = None,
           save_path: OptionalStr = None, exp_name: OptionalStr = None, save_every: OptionalInt = None, 
-          chunk_overlap: OptionalInt = None, weight_names: StrOrList = None, device: OptionalStr = None) -> None:
+          chunk_num: OptionalInt = None, weight_names: StrOrList = None, device: OptionalStr = None) -> None:
     """
     This function activates model training functions depending on the required training type.
 
@@ -49,15 +49,11 @@ def train(model: nn.Module, train_dataset: DataLoaderType, loss_fn: LossFnType, 
             train_type == 'mnm_lev_marq', - corresponds to Levenberg–Marquardt algorithm on base of Mixed Newton Method,
             train_type == 'sgd_auto', - corresponds to Stochastic Gradient Descent, implemented by means of loss.backward() function.
             train_type == 'sgd_manual', - corresponds to Stochastic Gradient Descent, implemented by means of pytorch jacobian function.
-        chunk_size (int, optional): The value that shows the sizes to chunk samples on. Typically batch has following dimensions:
-            [batch_size, 2, sample_size], where second dimension corresponds to input/target. Function divides samples
-            into chunks with chunk_size size to calculate parameter step on them to save device memory. Defaults to "None".
         save_path (str, optional): Folder path to save function product. Defaults to "None".
         exp_name (str, optional): Name of simulation, which is reflected in function product names. Defaults to "None".
         save_every (int, optional): The number which reflects following: the results would be saved every save_every epochs.
             If save_every equals None, then results will be saved at the end of learning. Defaults to "None".
-        chunk_overlap (int, optional): The number of overlapped samples between 2 chunks. If chunk_overlap is None, then it
-            is set to 0. Defaults to "None".
+        chunk_num(int, optional): The number of chunks in dataset. Defaults to "None".
         weight_names (str or list of str, optional): By spceifying `weight_names` it is possible to compute gradient only
             for several named parameters. Defaults to "None".
         device (str, optional): device to implement calculations: "cpu" or "cuda:0". Defaults is None.
@@ -93,11 +89,11 @@ def train(model: nn.Module, train_dataset: DataLoaderType, loss_fn: LossFnType, 
                                                           save_signals, weight_names)
     elif train_type == 'mnm_damped':
         learning_curve, best_criterion = train_mixed_newton_damped(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
-                                                                   quality_criterion, batch_to_tensors, chunk_size, chunk_overlap, 
+                                                                   quality_criterion, batch_to_tensors, chunk_num, 
                                                                    save_path, exp_name, save_every, save_signals, weight_names)
     elif train_type == 'mnm_lev_marq':
         learning_curve, best_criterion = train_mixed_newton_levenb_marq(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
-                                                                        quality_criterion, batch_to_tensors, chunk_size, chunk_overlap, 
+                                                                        quality_criterion, batch_to_tensors, chunk_num, 
                                                                         save_path, exp_name, save_every, save_signals, weight_names)
     else:
         print(f"Attention! Training type \'{train_type}\' doesn`t match any of the possible types: \'sgd\', \'mnm\'.")

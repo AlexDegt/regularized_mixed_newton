@@ -2,6 +2,7 @@ import sys
 
 sys.path.append('../../')
 import os 
+
 import torch
 import random
 import numpy as np
@@ -12,15 +13,15 @@ from scipy.io import loadmat
 from model import CVCNN
 
 # Determine experiment name and create its directory
-exp_name = "mnm_damped_layers_4_channels_5_ker_size_5_act_sigmoid"
-# exp_name = "test"
+# exp_name = "mnm_damped_layers_4_channels_5_ker_size_5_act_sigmoid"
+exp_name = "test"
 
 add_folder = os.path.join("")
 curr_path = os.getcwd()
 save_path = os.path.join(curr_path, add_folder, exp_name)
 # os.mkdir(save_path)
 
-device = "cuda:0"
+device = "cuda:4"
 # device = "cpu"
 seed = 964
 torch.manual_seed(seed)
@@ -39,10 +40,12 @@ mat = loadmat("../../data/data2d.mat")
 dtype = torch.complex128
 
 # Number of output channels of each convolutional layer.
-out_channels = [5, 5, 5, 1]
+out_channels = [3, 3, 3, 1]
+# out_channels = [5, 5, 5, 1]
 # Kernel size for each layer. Kernel sizes must be odd integer numbers.
 # Otherwise input sequence length will be reduced by 1 (for case of mode == 'same' in nn.Conv1d).
-kernel_size = [5, 5, 5, 5]
+kernel_size = [3, 3, 3, 3]
+# kernel_size = [5, 5, 5, 5]
 # Activation functions are listed in /model/layers/activation.py
 # Don`t forget that model output must be holomorphic w.r.t. model parameters
 activate = ['sigmoid', 'sigmoid', 'sigmoid', 'sigmoid']
@@ -54,12 +57,16 @@ slot_num = 1
 # Elements of train_slots_ind, test_slots_ind must be higher than 0 and lower, than slot_num
 # In full-batch mode train, validation and test dataset are the same.
 # In mini-batch mode validation and test dataset are the same.
+# train_slots_ind, validat_slots_ind, test_slots_ind = range(8), range(8), range(8, 10)
 train_slots_ind, validat_slots_ind, test_slots_ind = range(1), range(1), range(1)
 delay_d = 0
 # batch_size == None is equal to batch_size = 1.
-# block_size == None is equal to block_size = signal length. 
-batch_size = None
-block_size = None
+# block_size == None is equal to block_size = signal length.
+# Block size is the same as chunk size 
+batch_size = 1
+chunk_num = 1
+chunk_size = int(213504/chunk_num)
+# chunk_size = int(0.8 * 213500/chunk_num)
 # L2 regularization parameter
 alpha = 0.0
 # Configuration file
@@ -67,10 +74,10 @@ config_train = None
 # Input signal is padded with padding_zeros_num zeros at the beginning and ending of input signal.
 # Since each 1d convolution in model CVCNN makes zero-padding with int(kernel_size/2) left and right, then 
 # NO additional padding in the input batches is required.
-padding_zeros_num = 0
+padding_zeros_num = 4
 dataset = dataset_prepare(mat, dtype, device, slot_num=slot_num, delay_d=delay_d,
                           train_slots_ind=train_slots_ind, test_slots_ind=test_slots_ind, validat_slots_ind=validat_slots_ind,
-                          padding_zeros_num=padding_zeros_num, batch_size=batch_size, block_size=block_size)
+                          padding_zeros_num=padding_zeros_num, batch_size=batch_size, block_size=chunk_size)
 
 train_dataset, validate_dataset, test_dataset = dataset
 
@@ -159,16 +166,12 @@ def param_init(model):
 
 # param_init(model)
 
-# Size of signal parts (chunks), which the whole signal is divided into.
-# Hessian and gradient are calculated separately on these chunks and accumulated through the whole signal.
-# Then hessian is inverted.
-chunk_size = int(213504/24)
 # Train type shows which algorithm is used for optimization.
-# train_type='sgd_auto' - gradient-based optimizer.
-# train_type='mnm_damped' - Damped Mixed Newton.
-# train_type='mnm_lev_marq' - Levenberg-Marquardt on base of Mixed Newton. 
+# train_type='sgd_auto' # gradient-based optimizer.
+train_type='mnm_damped' # Damped Mixed Newton.
+# train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. 
 learning_curve, best_criterion = train(model, train_dataset, loss, nmse, config_train, batch_to_tensors, validate_dataset, test_dataset, 
-                                       train_type='mnm_damped', chunk_size=chunk_size, chunk_overlap=padding_zeros_num, exp_name=exp_name, 
-                                       save_every=1, save_path=save_path, weight_names=weight_names, device=device)
+                                       train_type=train_type, chunk_num=chunk_num, exp_name=exp_name, save_every=1, save_path=save_path, 
+                                       weight_names=weight_names, device=device)
 
 print(f"Best NMSE: {best_criterion} dB")
