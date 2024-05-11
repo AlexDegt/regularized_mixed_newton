@@ -409,7 +409,7 @@ class Oracle(object):
     @torch.enable_grad()
     def hessian(self, signal_batch: BatchType, weight_names: StrOrList = None, compute_fn_val: bool = False,
                 outer_jacobian_strategy: str = "reverse-mode", return_full_wirtinger_derivative: bool = False,
-                idxs: OptionalTensor = None, return_for_cuvic_newton = True) -> DerRetType:
+                idxs: OptionalTensor = None, return_for_cubic_newton = True) -> DerRetType:
         """
         This method computes hessian value of the loss function and optionally returns loss function value
         as nondifferentiable scalar. The hessian is computed using torch.autograd.functional.hessian function. This method
