@@ -409,7 +409,8 @@ class Oracle(object):
     @torch.enable_grad()
     def hessian(self, signal_batch: BatchType, weight_names: StrOrList = None, compute_fn_val: bool = False,
                 outer_jacobian_strategy: str = "reverse-mode", return_full_wirtinger_derivative: bool = False,
-                idxs: OptionalTensor = None, return_for_cuvic_newton = True) -> DerRetType:
+                idxs: OptionalTensor = None, return_for_cubic_newton = True, vectorize: bool = False,
+                return_full_real_derivative: bool = False) -> DerRetType:
         """
         This method computes hessian value of the loss function and optionally returns loss function value
         as nondifferentiable scalar. The hessian is computed using torch.autograd.functional.hessian function. This method
@@ -425,6 +426,8 @@ class Oracle(object):
                 whether the outer Jacobian will be computed with forward or reverse mode AD.
                 Currently, computing the outer Jacobian in "forward-mode" requires vectorized=True. Defaults to "reverse-mode".
             return_full_wirtinger_derivative (bool, optional): If specified "True" a hessian wrt (z, z*) variables is returned,
+                by default only d^2 / (dz*dz) is returned. Defaults to "False".
+            return_full_real_derivative (bool, optional): If specified "True" a hessian wrt (Re(z), Im(z)) variables is returned,
                 by default only d^2 / (dz*dz) is returned. Defaults to "False".
             idxs (Tensor, optional): 1d int Tensor of indexes to perform masked get only for specified indexes from
                 the original hessian. If idxs is not None we consider returned hessian as a 2d float Tensor of shape
@@ -462,7 +465,7 @@ class Oracle(object):
                 load_weights(self._model, names, weights)
                 return self._loss_fn(self._model, signal_batch)
             
-            H_res = torch.autograd.functional.hessian(f_xx_xy_yy, tuple(joint_params), create_graph=False, vectorize=True,
+            H_res = torch.autograd.functional.hessian(f_xx_xy_yy, tuple(joint_params), create_graph=False, vectorize=vectorize,
                                                       outer_jacobian_strategy=outer_jacobian_strategy)
 
             H_res_xx = torch.cat(tuple(torch.cat(_reshape_param_tensor_tuple(row, h_row[:num_real_params]), dim=1)\
@@ -478,7 +481,15 @@ class Oracle(object):
             else:
                 H_res_yy = torch.cat(tuple(torch.cat(_reshape_param_tensor_tuple(row, h_row[num_real_params:]), dim=1) \
                                            for row, h_row in enumerate(H_res[num_real_params:])), dim=0)
-            if return_full_wirtinger_derivative:
+            if return_full_real_derivative:
+                if idxs is None:
+                    H = torch.cat((torch.cat((H_res_xx, H_res_xy), dim=1), torch.cat((H_res_yx, H_res_yy), dim=1)),
+                                  dim=0)
+                else:
+                    H = torch.cat((torch.cat((H_res_xx[idxs[:, None], idxs], H_res_xy[idxs[:, None], idxs]), dim=1),
+                                   torch.cat((H_res_yx[idxs[:, None], idxs], H_res_yy[idxs[:, None], idxs]), dim=1)),
+                                  dim=0)
+            elif return_full_wirtinger_derivative:
                 H_z_z = (H_res_xx - H_res_yy - 1.j * (H_res_yx + H_res_xy)) / 4.
                 H_z_z_conj = (H_res_xx + H_res_yy + 1.j * (H_res_xy - H_res_yx)) / 4.
                 H_z_conj_z = (H_res_xx + H_res_yy + 1.j * (H_res_yx - H_res_xy)) / 4.
@@ -500,7 +511,7 @@ class Oracle(object):
                 load_weights(self._model, names, weights)
                 return self._loss_fn(self._model, signal_batch)
         
-            H_res = torch.autograd.functional.hessian(f, tuple(params), create_graph=False, vectorize=True,
+            H_res = torch.autograd.functional.hessian(f, tuple(params), create_graph=False, vectorize=vectorize,
                                                       outer_jacobian_strategy=outer_jacobian_strategy)
             if idxs is None:
                 H = torch.cat(tuple(torch.cat(_reshape_param_tensor_tuple(row, h_row), dim=1)\
@@ -519,7 +530,8 @@ class Oracle(object):
     @torch.enable_grad()
     def gradient_through_jacobian(self, signal_batch: BatchType, weight_names: StrOrList = None,
                                   compute_fn_val: bool = False, return_full_wirtinger_derivative: bool = False,
-                                  idxs: OptionalTensor = None) -> DerRetType:
+                                  idxs: OptionalTensor = None, strategy: str = "reverse-mode", vectorize: bool = False,
+                                  return_full_real_derivative: bool = False) -> DerRetType:
         """
         This method computes gradient value of the loss function and optionally returns loss function value
         as nondifferentiable scalar. The gradient is computed using torch.autograd.functional.jacobian function. This method
@@ -532,6 +544,8 @@ class Oracle(object):
             compute_fn_val (bool, optional): If set "True" the loss function value is returned. Defaults to "False".
             return_full_wirtinger_derivative (bool, optional): If specified "True" a gradient wrt (z, z*) variables is
                 returned, by default only d / dz* is returned. Defaults to "False".
+            return_full_real_derivative (bool, optional): If specified "True" a hessian wrt (Re(z), Im(z)) variables is returned,
+                by default only d^2 / (dz*dz) is returned. Defaults to "False".
             idxs (Tensor, optional): 1d int Tensor of indexes to perform masked get only for specified indexes from
                 the original gradient. If idxs is not None we consider returned gradient as a 1d float Tensor of size
                 len(idxs) with elements corresponding to indexes from idxs representing positions
@@ -560,13 +574,18 @@ class Oracle(object):
                 load_weights(self._model, names, weights)
                 return self._loss_fn(self._model, signal_batch)
 
-            J = torch.autograd.functional.jacobian(f_x_y, tuple(joint_params), create_graph=False, vectorize=True)
+            J = torch.autograd.functional.jacobian(f_x_y, tuple(joint_params), strategy=strategy, create_graph=False, vectorize=vectorize)
 
 
             J_x = torch.cat(tuple(j.contiguous().view(1, -1) for j in J[:num_real_params]), dim=1)
             J_y = torch.cat(tuple(j.contiguous().view(1, -1) for j in J[num_real_params:]), dim=1)
 
-            if return_full_wirtinger_derivative:
+            if return_full_real_derivative:
+                if idxs is None:
+                    J = torch.cat((J_x, J_y), dim=1)
+                else:
+                    J = torch.cat((J_x[:, idxs], J_y[:, idxs]), dim=1)
+            elif return_full_wirtinger_derivative:
                 J_z = (J_x - 1.j * J_y) / 2.
                 J_z_conj = (J_x + 1.j * J_y) / 2.
                 if idxs is None:
@@ -583,7 +602,7 @@ class Oracle(object):
                 load_weights(self._model, names, weights)
                 return self._loss_fn(self._model, signal_batch)
             
-            J = torch.autograd.functional.jacobian(f, tuple(params), create_graph=False, vectorize=True)
+            J = torch.autograd.functional.jacobian(f, tuple(params), strategy=strategy, create_graph=False, vectorize=vectorize)
             if idxs is None:
                 J = torch.cat(tuple(j.contiguous().view(1, -1) for j in J), dim=1)
             else:
@@ -598,7 +617,8 @@ class Oracle(object):
     
     @torch.enable_grad()
     def gradient(self, signal_batch: BatchType, weight_names: StrOrList = None, compute_fn_val: bool = False,
-                 return_full_wirtinger_derivative: bool = False, idxs: OptionalTensor = None) -> DerRetType:
+                 return_full_wirtinger_derivative: bool = False, idxs: OptionalTensor = None,
+                 strategy: str = "reverse-mode", vectorize: bool = False, return_full_real_derivative: bool = False) -> DerRetType:
         """
         This method computes gradient value of the loss function and optionally returns loss function value.
         The gradient is computed using .backward() method called on loss function value. This method makes .zero_grad() for
@@ -611,6 +631,8 @@ class Oracle(object):
             compute_fn_val (bool, optional): If set "True" the loss function value is returned. Defaults to "False".
             return_full_wirtinger_derivative (bool, optional): If specified "True" a gradient wrt (z, z*) variables is
                 returned, by default only d / dz* is returned. Defaults to "False".
+            return_full_real_derivative (bool, optional): If specified "True" a hessian wrt (Re(z), Im(z)) variables is returned,
+                by default only d^2 / (dz*dz) is returned. Defaults to "False".
             idxs (Tensor, optional): 1d int Tensor of indexes to perform masked get only for specified indexes from
                 the original gradient. If idxs is not None we consider returned gradient as a 1d float Tensor of size
                 len(idxs) with elements corresponding to indexes from idxs representing positions
@@ -636,7 +658,9 @@ class Oracle(object):
         if _check_tensors_complex_any(params):# z = x + i * y
             return self.gradient_through_jacobian(signal_batch=signal_batch, weight_names=weight_names,
                                                   compute_fn_val=compute_fn_val,
-                                                  return_full_wirtinger_derivative=return_full_wirtinger_derivative, idxs=idxs)
+                                                  return_full_wirtinger_derivative=return_full_wirtinger_derivative, idxs=idxs,
+                                                  return_full_real_derivative=return_full_real_derivative,
+                                                  strategy=strategy, vectorize=vectorize)
 
         loss_val = self._loss_fn(self._model, signal_batch)
         loss_val.backward()

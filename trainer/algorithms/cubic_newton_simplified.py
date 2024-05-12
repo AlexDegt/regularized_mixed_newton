@@ -106,17 +106,12 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
     if save_every is None:
         save_every = epochs - 1
 
-    max_grad_converge_flag = 1
-    grad_converge_flag = 0
-
     epoch, print_every = 0, 1
 
     SICOracle = Oracle(model, loss_fn)
 
     mu = 1.
-    alpha = 1e-3
-    lrs = []
-    lambda_curve = []
+    reg_param_curve = []
     learning_curve_validat = []
     learning_curve_test = []
     grad_norm_curve = []
@@ -125,104 +120,83 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
     timer = Timer()
     general_timer = Timer()
     general_timer.__enter__()
+
+    # Calculate initial values of loss and quality criterion on validation and test dataset
     with torch.no_grad():
-        for batch in test_dataset:
-            loss_val = loss_fn(model, batch)
-            criterion_val_test = quality_criterion(model, batch)
+        for test_batch in test_dataset:
+            criterion_val_test = quality_criterion(model, test_batch)
             best_criterion_test = criterion_val_test
-            print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f} dB.".format(loss_val.item(), criterion_val_test))
+            print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f} dB.".format(loss_fn(model, test_batch).item(), criterion_val_test))
             break
-        for batch in train_dataset:
+        for validate_batch in validate_dataset:
+            # Save loss value only for validation dataset (whole train signal length)
             loss_val = loss_fn(model, batch)
-            criterion_val_train = quality_criterion(model, batch)
-            best_criterion_train = criterion_val_train
+            criterion_val_train = quality_criterion(model, validate_batch)
             print("Begin: loss = {:.4e}, quality_criterion_train = {:.8f} dB.".format(loss_val.item(), criterion_val_train))
             break
     epoch = 0
     min_grad_norm = 1e-5    
-    min_delta_criterion = 1e-3
-    delta_criterion = 1
-    max_converge_flag = 20
-    converge_flag = 0
-    # while (grad_norm is None or grad_converge_flag != max_grad_converge_flag) and \
-    #         (epoch < 5000):
     # for epoch in range(epochs):
-    while grad_norm is None or grad_converge_flag != max_grad_converge_flag:
-    # while (converge_flag < max_converge_flag) and (epoch < 250):
-    # while epoch == -1:
+    while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
+        # Accumulate hessian and gradient on the whole training dataset.
+        # Combination of all batches on train dataset should be equal validation dataset
         for j, batch in enumerate(train_dataset):
 
-            if type(loss_val) == torch.Tensor:
-                loss_val = loss_val.item()
-
+            # Simplified cubic Newton requires mixed Hessian calculation in contrast to the fair cubic Newton
             delta_hess, delta_grad = SICOracle.direction_through_jacobian(batch, batch_to_tensors, weight_names=weight_names)
 
+            hess = torch.zeros_like(delta_hess)
+            grad = torch.zeros_like(delta_grad)
             if j % chunk_num == 0:
-                hess = delta_hess
-                grad = delta_grad
+                hess = delta_hess.detach().clone()
+                grad = delta_grad.detach().clone()
             else:
                 hess += delta_hess
                 grad += delta_grad
-            delta_hess.detach()
-            delta_grad.detach()
             del delta_hess, delta_grad
+            torch.cuda.empty_cache()
+            
+        # Calculate and apply simplified cubic Newton step
         eigenvalues_hess, eigenvectors_hess = torch.linalg.eigh(hess)
-
-        lipschitz_constant = 1 / mu
-        lipschitz_constant /= 100
+        hess_cond = torch.linalg.cond(hess).item()
+        x = SICOracle.get_flat_params(name_list=weight_names)
+        lipschitz_constant = 1.e-2
         eigenvectors_gradient_product = eigenvectors_hess.T.conj() @ grad
         while True:
             delta, direction = find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant,
                                            eigenvectors_gradient_product)
             curr_params = x + direction
             SICOracle.set_flat_params(curr_params, name_list=weight_names)
+            # Calculate loss value on whole signal length
             with torch.no_grad():
-                tmp_criterion_val = quality_criterion(model, batch)
+                tmp_loss_val = loss_fn(model, validate_batch).item()
             lin_part = 2 * (grad * direction.conj()).sum()
             quad_part = ((hess @ direction) * direction.conj()).sum()
-            cube_estimation = criterion_val + lin_part + quad_part + lipschitz_constant * delta ** 2 (1 + delta / 6)
+            cube_estimation = tmp_criterion_val + lin_part + quad_part + lipschitz_constant * delta ** 2 * (1 + delta / 6)
             if tmp_criterion_val.real > cube_estimation.real:
                 lipschitz_constant *= 1.5
             else:
                 break
-        print(lipschitz_constant, delta)
-        mu = 1 / lipschitz_constant
-
-        del hess_inv, hess
-
-        lrs.append(mu)
-        lambda_curve.append(alpha)
-        delta_criterion = abs(criterion_val_train - tmp_criterion_val)
+        
+        # Track algorithm parameters
+        reg_param_curve.append(lipschitz_constant * delta / 4)
         loss_val = tmp_loss_val
-        criterion_val_train = tmp_criterion_val
-
         grad_norm = torch.norm(grad).item()
-        del grad
-        torch.cuda.empty_cache()
-
         grad_norm_curve.append(grad_norm)
         weights_norm_curve.append(torch.norm(curr_params).item())
 
-        if grad_norm < min_grad_norm:
-            grad_converge_flag += 1
-        else:
-            grad_converge_flag = 0
+        del grad, hess
+        torch.cuda.empty_cache()
 
-        if delta_criterion < min_delta_criterion:
-            converge_flag += 1
-        else:
-            converge_flag = 0
-
+        # Track NMSE values on validation and test dataset and save gradient, model parameters norm and 
+        # algorithm regularization history
         with torch.no_grad():
-
-            for test_batch in test_dataset:
-                criterion_val_test = quality_criterion(model, test_batch)
-            for validate_batch in validate_dataset:
-                criterion_val_validat = quality_criterion(model, validate_batch)
+            criterion_val_test = quality_criterion(model, test_batch)
+            criterion_val_validate = quality_criterion(model, validate_batch)
 
             learning_curve_test.append(criterion_val_test)
-            learning_curve_validat.append(criterion_val_validat)
+            learning_curve_validat.append(criterion_val_validate)
 
             if criterion_val_test < best_criterion_test:
                 best_criterion_test = criterion_val_test
@@ -232,14 +206,14 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
                 np.save(save_path + f'lc_test{exp_name}.npy', np.array(learning_curve_test))
                 np.save(save_path + f'grad_norm{exp_name}.npy', np.array(grad_norm_curve))
                 np.save(save_path + f'param_norm{exp_name}.npy', np.array(weights_norm_curve))
-                np.save(save_path + f'lrs{exp_name}.npy', np.array(lrs))
-                np.save(save_path + f'regular{exp_name}.npy', np.array(lambda_curve))
+                np.save(save_path + f'regular{exp_name}.npy', np.array(reg_param_curve))
         timer.__exit__()
         if epoch % print_every == 0:
             print(f"Epoch is {epoch + 1}, quality_criterion_test = {criterion_val_test:.8f} dB, " + \
-                f"quality_criterion_validat = {criterion_val_validat:.8f} dB, stepsize = {lrs[-1]:.6e}, " + \
-                f"|grad| = {grad_norm:.4e}, time elapsed: {timer.interval:.2e}," + \
-                f"Hessian conditioning: {hess_cond:.4e}, alpha = {alpha:.4e}")
+                f"quality_criterion_validat = {criterion_val_validate:.8f} dB, " + \
+                f"|grad| = {grad_norm:.4e}, time elapsed: {timer.interval:.2e}, " + \
+                f"regular param = {reg_param_curve[-1]:.4e}, " + \
+                f"Hessian conditioning: {hess_cond:.4e}")
         epoch += 1
 
         general_timer.__exit__()
