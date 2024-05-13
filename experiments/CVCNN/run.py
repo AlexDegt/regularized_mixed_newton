@@ -40,14 +40,17 @@ mat = loadmat("../../data/data2d.mat")
 dtype = torch.complex128
 
 # Number of output channels of each convolutional layer.
+# out_channels = [1, 1]
 out_channels = [3, 3, 3, 1]
 # out_channels = [5, 5, 5, 1]
 # Kernel size for each layer. Kernel sizes must be odd integer numbers.
 # Otherwise input sequence length will be reduced by 1 (for case of mode == 'same' in nn.Conv1d).
+# kernel_size = [3, 3]
 kernel_size = [3, 3, 3, 3]
 # kernel_size = [5, 5, 5, 5]
 # Activation functions are listed in /model/layers/activation.py
 # Don`t forget that model output must be holomorphic w.r.t. model parameters
+# activate = ['sigmoid', 'sigmoid']
 activate = ['sigmoid', 'sigmoid', 'sigmoid', 'sigmoid']
 # activate = ['ctanh', 'ctanh', 'ctanh', 'ctanh']
 p_drop = list(np.zeros_like(out_channels))
@@ -74,6 +77,7 @@ config_train = None
 # Input signal is padded with padding_zeros_num zeros at the beginning and ending of input signal.
 # Since each 1d convolution in model CVCNN makes zero-padding with int(kernel_size/2) left and right, then 
 # NO additional padding in the input batches is required.
+# padding_zeros_num = 2
 padding_zeros_num = 4
 dataset = dataset_prepare(mat, dtype, device, slot_num=slot_num, delay_d=delay_d,
                           train_slots_ind=train_slots_ind, test_slots_ind=test_slots_ind, validat_slots_ind=validat_slots_ind,
@@ -157,19 +161,23 @@ def param_init(model):
             # torch.nn.init.uniform_(layer_module.weight.data, -1, 1)
 
             # Small initial parameters is important is case of using tanh activation
-            layer_module.weight.data *= 1e-5
+            layer_module.weight.data *= 1e-2
 
             if layer_module.bias is not None:
                 torch.nn.init.normal_(layer_module.bias.data, mean=0, std=1)
-                layer_module.bias.data *= 0
+                layer_module.bias.data *= 1e-2
     return None
 
-# param_init(model)
+param_init(model)
 
 # Train type shows which algorithm is used for optimization.
 # train_type='sgd_auto' # gradient-based optimizer.
-train_type='mnm_damped' # Damped Mixed Newton.
-# train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. 
+# train_type='mnm_damped' # Damped Mixed Newton. Work only with models with complex parameters!
+train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. Work only with models with complex parameters!
+# train_type='newton_damped' # Damped Newton. Can be used for models with real and complex parameters.
+# train_type='newton_lev_marq' # Levenberg-Marquardt on base of Newton. Can be used for models with real and complex parameters.
+# train_type='cubic_newton' # Cubic Newton. Currently work only with models with complex parameters!
+# train_type='cubic_newton_simple' # Simplified cubic Newton. Currently work only with models with complex parameters!
 learning_curve, best_criterion = train(model, train_dataset, loss, nmse, config_train, batch_to_tensors, validate_dataset, test_dataset, 
                                        train_type=train_type, chunk_num=chunk_num, exp_name=exp_name, save_every=1, save_path=save_path, 
                                        weight_names=weight_names, device=device)
