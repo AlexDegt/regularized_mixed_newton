@@ -373,9 +373,9 @@ class Oracle(object):
             
             J = torch.autograd.functional.jacobian(f, tuple(params), create_graph=False, vectorize=vectorize, strategy=strategy)
             if idxs is None:
-                J = torch.cat(tuple(j.view(batch_size, j.size()[2], -1) for j in J_chunk), dim=2)
+                J = torch.cat(tuple(j.view(batch_size, j.size()[2], -1) for j in J), dim=2)
             else:
-                J = torch.cat(tuple(j.view(batch_size, j.size()[2], -1) for j in J_chunk), dim=2)[..., idxs]
+                J = torch.cat(tuple(j.view(batch_size, j.size()[2], -1) for j in J), dim=2)[..., idxs]
 
         load_weights(self._model, names, params, is_nn_param=True)
 

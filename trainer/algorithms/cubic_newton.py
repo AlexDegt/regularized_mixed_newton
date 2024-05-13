@@ -34,7 +34,10 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvec
     def get_direction_delta(delta):
         diag_values = eigenvalues_hess + lipschitz_constant * delta / 4
         return -eigenvectors_hess @ (1 / diag_values * eigenvectors_gradient_product)
-    delta_max, delta_min, delta = np.inf, 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0).cpu().item(), 100
+    tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0).cpu().item()
+    if isinstance(tmp, torch.Tensor):
+        tmp = tmp.cpu().item()
+    delta_max, delta_min, delta = np.inf, tmp, 100
     while True:
         direction = get_direction_delta(delta)
         # Track direction value
@@ -114,8 +117,12 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
 
     mu = 1.
     reg_param_curve = []
-    learning_curve_validat = []
+    learning_curve_train = []
     learning_curve_test = []
+    learning_curve_validate = []
+    learning_curve_train_qcrit = []
+    learning_curve_test_qcrit = []
+    learning_curve_validate_qcrit = []
     grad_norm_curve = []
     weights_norm_curve = []
     grad_norm = None
@@ -123,21 +130,33 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
     general_timer = Timer()
     general_timer.__enter__()
 
+    def accum_loss(dataset):
+        loss_val = 0
+        for batch in dataset:
+            loss_val += SICOracle.loss_function_val(batch).item()
+        return loss_val
+            
     # Calculate initial values of loss and quality criterion on validation and test dataset
     with torch.no_grad():
-        for test_batch in test_dataset:
-            criterion_val_test = quality_criterion(model, test_batch)
-            best_criterion_test = criterion_val_test
-            print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f} dB.".format(loss_fn(model, test_batch).item(), criterion_val_test))
-            break
-        for validate_batch in validate_dataset:
-            # Save loss value only for validation dataset (whole train signal length)
-            loss_val = loss_fn(model, validate_batch)
-            criterion_val_train = quality_criterion(model, validate_batch)
-            print("Begin: loss = {:.4e}, quality_criterion_train = {:.8f} dB.".format(loss_val.item(), criterion_val_train))
-            break
+        loss_val_test = accum_loss(test_dataset)
+        criterion_val_test = quality_criterion(model, test_dataset)
+        best_criterion_test = criterion_val_test
+        learning_curve_test.append(loss_val_test)
+        learning_curve_test_qcrit.append(criterion_val_test)
+        print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f} dB.".format(loss_val_test, criterion_val_test))
+        loss_val_train = accum_loss(train_dataset)
+        criterion_val_train = quality_criterion(model, train_dataset)
+        learning_curve_train.append(loss_val_train)   
+        learning_curve_train_qcrit.append(criterion_val_train)
+        print("Begin: loss = {:.4e}, quality_criterion_train = {:.8f} dB.".format(loss_val_train, criterion_val_train))
+        loss_val_validate = accum_loss(validate_dataset)
+        criterion_val_validate = quality_criterion(model, validate_dataset)
+        learning_curve_validate.append(loss_val_validate)
+        learning_curve_validate_qcrit.append(criterion_val_validate)
+        print("Begin: loss = {:.4e}, quality_criterion_validate = {:.8f} dB.".format(loss_val_validate, criterion_val_validate))
+    
     epoch = 0
-    min_grad_norm = 1e-5    
+    min_grad_norm = 1e-8 
     # for epoch in range(3):
     while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
@@ -150,16 +169,14 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
             delta_grad = SICOracle.gradient(batch, weight_names=weight_names, return_full_real_derivative=False,
                             strategy='reverse-mode', vectorize=False)
 
-            hess = torch.zeros_like(delta_hess)
-            grad = torch.zeros_like(delta_grad)
-            if j % chunk_num == 0:
-                hess = delta_hess.detach().clone()
-                grad = delta_grad.detach().clone()
-            else:
+            with torch.no_grad():
+                if j % chunk_num == 0:
+                    hess = torch.zeros_like(delta_hess)
+                    grad = torch.zeros_like(delta_grad)
                 hess += delta_hess
                 grad += delta_grad
-            del delta_hess, delta_grad
-            torch.cuda.empty_cache()
+                del delta_hess, delta_grad
+                torch.cuda.empty_cache()
 
         # Calculate and apply cubic Newton step
         eigenvalues_hess, eigenvectors_hess = torch.linalg.eigh(hess)
@@ -170,14 +187,14 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         while True:
             delta, direction = find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant,
                                            eigenvectors_gradient_product)
-            curr_params = x + direction
+            curr_params = x + mu * direction
             SICOracle.set_flat_params(curr_params, name_list=weight_names)
             # Calculate loss value on whole signal length
             with torch.no_grad():
-                tmp_loss_val = loss_fn(model, validate_batch).item()
+                tmp_loss_val = accum_loss(train_dataset)
             lin_part = 2 * (grad * direction.conj()).sum()
             quad_part = ((hess @ direction) * direction.conj()).sum()
-            cube_estimation = loss_val + lin_part + quad_part + lipschitz_constant * delta ** 3 / 6
+            cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 3 / 6
             # Track algorithm parameters
             print(f"Validation loss: {tmp_loss_val:.4e}")
             print(f"Cube estimation: {cube_estimation.item():.4e}")
@@ -193,7 +210,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         
         # Track algorithm parameters
         reg_param_curve.append(lipschitz_constant * delta / 4)
-        loss_val = tmp_loss_val
+        loss_val_train = tmp_loss_val
         grad_norm = torch.norm(grad).item()
         grad_norm_curve.append(grad_norm)
         weights_norm_curve.append(torch.norm(curr_params).item())
@@ -204,25 +221,37 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         # Track NMSE values on validation and test dataset and save gradient, model parameters norm and 
         # algorithm regularization history
         with torch.no_grad():
-            criterion_val_test = quality_criterion(model, test_batch)
-            criterion_val_validat = quality_criterion(model, validate_batch)
+            criterion_val_train = quality_criterion(model, train_dataset)
+            loss_val_test = accum_loss(test_dataset)
+            criterion_val_test = quality_criterion(model, test_dataset)
+            loss_val_validate = accum_loss(validate_dataset)
+            criterion_val_validate = quality_criterion(model, validate_dataset)
 
-            learning_curve_test.append(criterion_val_test)
-            learning_curve_validat.append(criterion_val_validat)
+            learning_curve_test.append(loss_val_test)
+            learning_curve_train.append(loss_val_train)
+            learning_curve_validate.append(loss_val_validate)
+            learning_curve_test_qcrit.append(criterion_val_test)
+            learning_curve_train_qcrit.append(criterion_val_train)
+            learning_curve_validate_qcrit.append(criterion_val_validate)
 
             if criterion_val_test < best_criterion_test:
                 best_criterion_test = criterion_val_test
                 torch.save(model.state_dict(), save_path+'weights_best_test'+exp_name)
             if epoch % save_every == 0:
-                np.save(save_path + f'lc_validat{exp_name}.npy', np.array(learning_curve_validat))
+                np.save(save_path + f'lc_train{exp_name}.npy', np.array(learning_curve_train))
                 np.save(save_path + f'lc_test{exp_name}.npy', np.array(learning_curve_test))
+                np.save(save_path + f'lc_validate{exp_name}.npy', np.array(learning_curve_validate))
+                np.save(save_path + f'lc_qcrit_train{exp_name}.npy', np.array(learning_curve_train_qcrit))
+                np.save(save_path + f'lc_qcrit_test{exp_name}.npy', np.array(learning_curve_test_qcrit))
+                np.save(save_path + f'lc_qcrit_validate{exp_name}.npy', np.array(learning_curve_validate_qcrit))
                 np.save(save_path + f'grad_norm{exp_name}.npy', np.array(grad_norm_curve))
                 np.save(save_path + f'param_norm{exp_name}.npy', np.array(weights_norm_curve))
                 np.save(save_path + f'regular{exp_name}.npy', np.array(reg_param_curve))
         timer.__exit__()
         if epoch % print_every == 0:
-            print(f"Epoch is {epoch + 1}, quality_criterion_test = {criterion_val_test:.8f} dB, " + \
-                f"quality_criterion_validat = {criterion_val_validat:.8f} dB, " + \
+            print(f"Epoch is {epoch + 1}, " + \
+                f"loss_train = {loss_val_train:.8f}, " + \
+                f"quality_criterion_train = {criterion_val_train:.8f} dB, stepsize = {mu:.6e}, " + \
                 f"|grad| = {grad_norm:.4e}, time elapsed: {timer.interval:.2e}, " + \
                 f"regular param = {reg_param_curve[-1]:.4e}, " + \
                 f"Hessian conditioning: {hess_cond:.4e}")
