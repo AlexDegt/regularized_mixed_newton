@@ -88,8 +88,13 @@ def train_mixed_newton_damped(model: nn.Module, train_dataset: DataLoaderType, v
     mu = 1.e-2
     alpha = 1.
     lrs = []
-    learning_curve_validate = []
+    reg_param_curve = []
+    learning_curve_train = []
     learning_curve_test = []
+    learning_curve_validate = []
+    learning_curve_train_qcrit = []
+    learning_curve_test_qcrit = []
+    learning_curve_validate_qcrit = []
     grad_norm_curve = []
     weights_norm_curve = []
     grad_norm = None
@@ -97,23 +102,33 @@ def train_mixed_newton_damped(model: nn.Module, train_dataset: DataLoaderType, v
     general_timer = Timer()
     general_timer.__enter__()
 
+    def accum_loss(dataset):
+        loss_val = 0
+        for batch in dataset:
+            loss_val += SICOracle.loss_function_val(batch).item()
+        return loss_val
+            
     # Calculate initial values of loss and quality criterion on validation and test dataset
     with torch.no_grad():
-        for test_batch in test_dataset:
-            loss_val_test = loss_fn(model, test_batch)
-            criterion_val_test = quality_criterion(model, test_batch)
-            best_criterion_test = criterion_val_test
-            print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f} dB.".format(loss_val_test.item(), criterion_val_test))
-            break
-        for validate_batch in validate_dataset:
-            loss_val_validate = loss_fn(model, validate_batch)
-            criterion_val_validate = quality_criterion(model, validate_batch)
-            best_criterion_validate = criterion_val_validate
-            print("Begin: loss = {:.4e}, quality_criterion_validate = {:.8f} dB.".format(loss_val_validate.item(), criterion_val_validate))
-            break
+        loss_val_test = accum_loss(test_dataset)
+        criterion_val_test = quality_criterion(model, test_dataset)
+        best_criterion_test = criterion_val_test
+        learning_curve_test.append(loss_val_test)
+        learning_curve_test_qcrit.append(criterion_val_test)
+        print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f} dB.".format(loss_val_test, criterion_val_test))
+        loss_val_train = accum_loss(train_dataset)
+        criterion_val_train = quality_criterion(model, train_dataset)
+        learning_curve_train.append(loss_val_train)   
+        learning_curve_train_qcrit.append(criterion_val_train)
+        print("Begin: loss = {:.4e}, quality_criterion_train = {:.8f} dB.".format(loss_val_train, criterion_val_train))
+        loss_val_validate = accum_loss(validate_dataset)
+        criterion_val_validate = quality_criterion(model, validate_dataset)
+        learning_curve_validate.append(loss_val_validate)
+        learning_curve_validate_qcrit.append(criterion_val_validate)
+        print("Begin: loss = {:.4e}, quality_criterion_validate = {:.8f} dB.".format(loss_val_validate, criterion_val_validate))
    
     epoch = 0
-    min_grad_norm = 1e-5
+    min_grad_norm = 1e-8
     # for epoch in range(epochs):
     while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
@@ -122,16 +137,15 @@ def train_mixed_newton_damped(model: nn.Module, train_dataset: DataLoaderType, v
         for j, batch in enumerate(train_dataset):
 
             delta_hess, delta_grad = SICOracle.direction_through_jacobian(batch, batch_to_tensors, weight_names=weight_names)
-            hess = torch.zeros_like(delta_hess)
-            grad = torch.zeros_like(delta_grad)
-            if j % chunk_num == 0:
-                hess = delta_hess.detach().clone()
-                grad = delta_grad.detach().clone()
-            else:
+
+            with torch.no_grad():
+                if j % chunk_num == 0:
+                    hess = torch.zeros_like(delta_hess)
+                    grad = torch.zeros_like(delta_grad)
                 hess += delta_hess
                 grad += delta_grad
-            del delta_hess, delta_grad
-            torch.cuda.empty_cache()
+                del delta_hess, delta_grad
+                torch.cuda.empty_cache()
 
         hess += alpha*torch.eye(hess.size()[0], device=hess.device)
         hess_cond = torch.linalg.cond(hess).item()
@@ -143,23 +157,26 @@ def train_mixed_newton_damped(model: nn.Module, train_dataset: DataLoaderType, v
         curr_params = x + mu * direction
         SICOracle.set_flat_params(curr_params, name_list=weight_names)
         with torch.no_grad():
-            tmp_loss_val = loss_fn(model, validate_batch).item()
-            tmp_criterion_val = quality_criterion(model, validate_batch)
+            tmp_loss_val = accum_loss(train_dataset)
+            tmp_criterion_val = quality_criterion(model, train_dataset)
 
-        if tmp_criterion_val <= criterion_val_validate:
+        if tmp_loss_val <= loss_val_train:
             mu *= 1.6
             if mu > 1.:
                 mu = 1.
         else:
-            while tmp_criterion_val > criterion_val_validate:
+            while tmp_loss_val > loss_val_train:
                 mu /= 1.2
                 curr_params = x + mu * direction
                 SICOracle.set_flat_params(curr_params, name_list=weight_names)
-                tmp_criterion_val = quality_criterion(model, validate_batch)
+                with torch.no_grad():
+                    tmp_loss_val = accum_loss(train_dataset)
+                    tmp_criterion_val = quality_criterion(model, train_dataset)
                 if epoch % print_every == 0:
-                    print(f"Deverges, epoch is {epoch + 1}, quality_criterion_validate = {tmp_criterion_val:.8f} dB," + \
-                            f"stepsize = {mu:.6e}")
-        criterion_val_validate = tmp_criterion_val
+                    print(f"Deverges, epoch is {epoch + 1}, quality_criterion_train = {tmp_criterion_val:.8f} dB," + \
+                            f"loss_val = {tmp_loss_val:.4f}, stepsize = {mu:.6e}")
+        loss_val_train = tmp_loss_val
+        criterion_val_train = tmp_criterion_val
 
         # Track algorithm parameters
         lrs.append(mu)
@@ -176,25 +193,36 @@ def train_mixed_newton_damped(model: nn.Module, train_dataset: DataLoaderType, v
         # Track NMSE values on validation and test dataset and save gradient, model parameters norm and 
         # algorithm regularization history
         with torch.no_grad():
-            for test_batch in test_dataset:
-                criterion_val_test = quality_criterion(model, test_batch)
+            loss_val_test = accum_loss(test_dataset)
+            criterion_val_test = quality_criterion(model, test_dataset)
+            loss_val_validate = accum_loss(validate_dataset)
+            criterion_val_validate = quality_criterion(model, validate_dataset)
 
-            learning_curve_test.append(criterion_val_test)
-            learning_curve_validate.append(criterion_val_validate)
+            learning_curve_test.append(loss_val_test)
+            learning_curve_train.append(loss_val_train)
+            learning_curve_validate.append(loss_val_validate)
+            learning_curve_test_qcrit.append(criterion_val_test)
+            learning_curve_train_qcrit.append(criterion_val_train)
+            learning_curve_validate_qcrit.append(criterion_val_validate)
 
             if criterion_val_test < best_criterion_test:
                 best_criterion_test = criterion_val_test
                 torch.save(model.state_dict(), save_path+'weights_best_test'+exp_name)
             if epoch % save_every == 0:
-                np.save(save_path + f'lc_validat{exp_name}.npy', np.array(learning_curve_validate))
+                np.save(save_path + f'lc_train{exp_name}.npy', np.array(learning_curve_train))
                 np.save(save_path + f'lc_test{exp_name}.npy', np.array(learning_curve_test))
+                np.save(save_path + f'lc_validate{exp_name}.npy', np.array(learning_curve_validate))
+                np.save(save_path + f'lc_qcrit_train{exp_name}.npy', np.array(learning_curve_train_qcrit))
+                np.save(save_path + f'lc_qcrit_test{exp_name}.npy', np.array(learning_curve_test_qcrit))
+                np.save(save_path + f'lc_qcrit_validate{exp_name}.npy', np.array(learning_curve_validate_qcrit))
                 np.save(save_path + f'grad_norm{exp_name}.npy', np.array(grad_norm_curve))
                 np.save(save_path + f'param_norm{exp_name}.npy', np.array(weights_norm_curve))
                 np.save(save_path + f'lrs{exp_name}.npy', np.array(lrs))
         timer.__exit__()
         if epoch % print_every == 0:
-            print(f"Epoch is {epoch + 1}, quality_criterion_test = {criterion_val_test:.8f} dB, " + \
-                f"quality_criterion_validat = {criterion_val_validate:.8f} dB, stepsize = {lrs[-1]:.6e}, " + \
+            print(f"Epoch is {epoch + 1}, " + \
+                f"loss_train = {loss_val_train:.8f}, " + \
+                f"quality_criterion_train = {criterion_val_train:.8f} dB, stepsize = {lrs[-1]:.6e}, " + \
                 f"|grad| = {grad_norm:.4e}, time elapsed: {timer.interval:.2e}," + \
                 f"Hessian conditioning: {hess_cond:.4e}")
         epoch += 1

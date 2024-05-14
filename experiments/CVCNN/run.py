@@ -13,7 +13,8 @@ from scipy.io import loadmat
 from model import CVCNN
 
 # Determine experiment name and create its directory
-# exp_name = "mnm_damped_layers_4_channels_5_ker_size_5_act_sigmoid"
+# exp_name = "mnm_damped_layers_4_channels_3_ker_size_3_act_sigmoid"
+# exp_name = "newton_nev_marq_layers_4_channels_3_ker_size_3_act_sigmoid_full_chunk_1000_epochs_1_sim"
 exp_name = "test"
 
 add_folder = os.path.join("")
@@ -21,7 +22,7 @@ curr_path = os.getcwd()
 save_path = os.path.join(curr_path, add_folder, exp_name)
 # os.mkdir(save_path)
 
-device = "cuda:4"
+device = "cuda:5"
 # device = "cpu"
 seed = 964
 torch.manual_seed(seed)
@@ -55,21 +56,21 @@ activate = ['sigmoid', 'sigmoid', 'sigmoid', 'sigmoid']
 # activate = ['ctanh', 'ctanh', 'ctanh', 'ctanh']
 p_drop = list(np.zeros_like(out_channels))
 delays = [[0]]
-slot_num = 1
+slot_num = 10
 # Indices of slots which are chosen to be included in train/test set (must be of a range type).
 # Elements of train_slots_ind, test_slots_ind must be higher than 0 and lower, than slot_num
 # In full-batch mode train, validation and test dataset are the same.
 # In mini-batch mode validation and test dataset are the same.
-# train_slots_ind, validat_slots_ind, test_slots_ind = range(8), range(8), range(8, 10)
-train_slots_ind, validat_slots_ind, test_slots_ind = range(1), range(1), range(1)
+train_slots_ind, validat_slots_ind, test_slots_ind = range(8), range(8), range(8, 10)
+# train_slots_ind, validat_slots_ind, test_slots_ind = range(1), range(1), range(1)
 delay_d = 0
 # batch_size == None is equal to batch_size = 1.
 # block_size == None is equal to block_size = signal length.
 # Block size is the same as chunk size 
 batch_size = 1
-chunk_num = 1
-chunk_size = int(213504/chunk_num)
-# chunk_size = int(0.8 * 213500/chunk_num)
+chunk_num = 5
+# chunk_size = int(213504/chunk_num)
+chunk_size = int(0.8 * 213500/chunk_num)
 # L2 regularization parameter
 alpha = 0.0
 # Configuration file
@@ -111,13 +112,20 @@ def complex_mse_loss(d, y, model):
 def loss(model, signal_batch):
     x, y, _ = batch_to_tensors(signal_batch)
     return complex_mse_loss(model(x), y, model)
+# This function is used only for telecom task.
+# Calculates NMSE on base of accumulated on every batch loss function
 @torch.no_grad()
-def nmse(model, signal_batch):
-    x, d, nf = batch_to_tensors(signal_batch)
-    nf_pow = nf.abs().square().sum()
-    err_pow = (d - model(x)).abs().square().sum()
-    targ_pow = d.abs().square().sum()
-    return 10.0 * torch.log10((err_pow - nf_pow) / (targ_pow - nf_pow)).item()
+# To avoid conflicts for classification task you can write:
+# def quality_criterion(loss_val):
+#     return loss_val
+def quality_criterion(model, dataset):
+    targ_pow, nf_pow, loss_val = 0, 0, 0
+    for batch in dataset:
+        _, d, nf = batch_to_tensors(batch)
+        nf_pow += nf.abs().square().sum()
+        targ_pow += d.abs().square().sum()
+        loss_val += loss(model, batch)
+    return 10.0 * torch.log10((loss_val - nf_pow) / (targ_pow - nf_pow)).item()
 
 def load_weights(path_name, device=device):
     return torch.load(path_name, map_location=torch.device(device))
@@ -173,12 +181,12 @@ param_init(model)
 # Train type shows which algorithm is used for optimization.
 # train_type='sgd_auto' # gradient-based optimizer.
 # train_type='mnm_damped' # Damped Mixed Newton. Work only with models with complex parameters!
-train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. Work only with models with complex parameters!
+# train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. Work only with models with complex parameters!
 # train_type='newton_damped' # Damped Newton. Can be used for models with real and complex parameters.
-# train_type='newton_lev_marq' # Levenberg-Marquardt on base of Newton. Can be used for models with real and complex parameters.
+train_type='newton_lev_marq' # Levenberg-Marquardt on base of Newton. Can be used for models with real and complex parameters.
 # train_type='cubic_newton' # Cubic Newton. Currently work only with models with complex parameters!
 # train_type='cubic_newton_simple' # Simplified cubic Newton. Currently work only with models with complex parameters!
-learning_curve, best_criterion = train(model, train_dataset, loss, nmse, config_train, batch_to_tensors, validate_dataset, test_dataset, 
+learning_curve, best_criterion = train(model, train_dataset, loss, quality_criterion, config_train, batch_to_tensors, validate_dataset, test_dataset, 
                                        train_type=train_type, chunk_num=chunk_num, exp_name=exp_name, save_every=1, save_path=save_path, 
                                        weight_names=weight_names, device=device)
 

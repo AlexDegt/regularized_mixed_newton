@@ -12,13 +12,14 @@ from model import CVCNN
 
 # Determine experiment name and create its directory
 # exp_name = "mnm_damped_layers_4_channels_5_ker_size_5_act_sigmoid"
+# exp_name = "newton_nev_marq_layers_4_channels_3_ker_size_3_act_sigmoid_full_chunk_1000_epochs"
 exp_name = "test"
 
 add_folder = os.path.join("")
 curr_path = os.getcwd()
 load_path = os.path.join(curr_path, add_folder, exp_name)
 
-device = "cuda:0"
+device = "cuda:5"
 # device = "cpu"
 seed = 964
 torch.manual_seed(seed)
@@ -37,12 +38,17 @@ mat = loadmat("../../data/data2d.mat")
 dtype = torch.complex128
 
 # Number of output channels of each convolutional layer.
+# out_channels = [1, 1]
 out_channels = [3, 3, 3, 1]
+# out_channels = [5, 5, 5, 1]
 # Kernel size for each layer. Kernel sizes must be odd integer numbers.
 # Otherwise input sequence length will be reduced by 1 (for case of mode == 'same' in nn.Conv1d).
+# kernel_size = [3, 3]
 kernel_size = [3, 3, 3, 3]
-# Activation functions are listed in /MIPT_opt/model/layers/activation.py
+# kernel_size = [5, 5, 5, 5]
+# Activation functions are listed in /model/layers/activation.py
 # Don`t forget that model output must be holomorphic w.r.t. model parameters
+# activate = ['sigmoid', 'sigmoid']
 activate = ['sigmoid', 'sigmoid', 'sigmoid', 'sigmoid']
 # activate = ['ctanh', 'ctanh', 'ctanh', 'ctanh']
 p_drop = list(np.zeros_like(out_channels))
@@ -53,11 +59,15 @@ slot_num = 10
 # In full-batch mode train, validation and test dataset are the same.
 # In mini-batch mode validation and test dataset are the same.
 train_slots_ind, validat_slots_ind, test_slots_ind = range(8), range(8), range(8, 10)
+# train_slots_ind, validat_slots_ind, test_slots_ind = range(1), range(1), range(1)
 delay_d = 0
 # batch_size == None is equal to batch_size = 1.
-# block_size == None is equal to block_size = signal length. 
-batch_size = None
-block_size = None
+# block_size == None is equal to block_size = signal length.
+# Block size is the same as chunk size 
+batch_size = 1
+chunk_num = 10
+# chunk_size = int(213504/chunk_num)
+chunk_size = int(0.8 * 213500/chunk_num)
 # L2 regularization parameter
 alpha = 0.0
 # Configuration file
@@ -65,12 +75,22 @@ config_train = None
 # Input signal is padded with padding_zeros_num zeros at the beginning and ending of input signal.
 # Since each 1d convolution in model CVCNN makes zero-padding with int(kernel_size/2) left and right, then 
 # NO additional padding in the input batches is required.
-padding_zeros_num = 0
+# padding_zeros_num = 2
+padding_zeros_num = 4
 dataset = dataset_prepare(mat, dtype, device, slot_num=slot_num, delay_d=delay_d,
                           train_slots_ind=train_slots_ind, test_slots_ind=test_slots_ind, validat_slots_ind=validat_slots_ind,
-                          padding_zeros_num=padding_zeros_num, batch_size=batch_size, block_size=block_size)
+                          padding_zeros_num=padding_zeros_num, batch_size=batch_size, block_size=chunk_size)
 
 train_dataset, validate_dataset, test_dataset = dataset
+
+# Show sizes of batches in train dataset, size of validation and test dataset
+# for i in range(len(dataset)):
+#     for j, batch in enumerate(dataset[i]):
+#         # if j == 0:
+#         print(batch[0].size())
+#         print(batch[1].size())
+#     print(j)
+# sys.exit()
 
 # Attention here!!! 2 channels of signal can be pre-distorted.
 # In order to pre-distort channel A, desired signal d should be chosen as: d = a[1][:, :1, :].
@@ -89,13 +109,20 @@ def complex_mse_loss(d, y, model):
 def loss(model, signal_batch):
     x, y, _ = batch_to_tensors(signal_batch)
     return complex_mse_loss(model(x), y, model)
+# This function is used only for telecom task.
+# Calculates NMSE on base of accumulated on every batch loss function
 @torch.no_grad()
-def nmse(model, signal_batch):
-    x, d, nf = batch_to_tensors(signal_batch)
-    nf_pow = nf.abs().square().sum()
-    err_pow = (d - model(x)).abs().square().sum()
-    targ_pow = d.abs().square().sum()
-    return 10.0 * torch.log10((err_pow - nf_pow) / (targ_pow - nf_pow)).item()
+# To avoid conflicts for classification task you can write:
+# def quality_criterion(loss_val):
+#     return loss_val
+def quality_criterion(model, dataset):
+    targ_pow, nf_pow, loss_val = 0, 0, 0
+    for batch in dataset:
+        _, d, nf = batch_to_tensors(batch)
+        nf_pow += nf.abs().square().sum()
+        targ_pow += d.abs().square().sum()
+        loss_val += loss(model, batch)
+    return 10.0 * torch.log10((loss_val - nf_pow) / (targ_pow - nf_pow)).item()
 
 def load_weights(path_name, device=device):
     return torch.load(path_name, map_location=torch.device(device))
@@ -129,11 +156,12 @@ set_weights(model, load_weights(load_path + r'/weights_best_test_' + exp_name))
 
 model.eval()
 with torch.no_grad():
-    # train_dataset, validate_dataset, test_dataset 
-    for j, batch in enumerate(test_dataset):
+    # train_dataset, validate_dataset, test_dataset
+    dataset = validate_dataset
+    NMSE = quality_criterion(model, dataset)
+    print(NMSE)
+    for j, batch in enumerate(dataset):
         data = batch_to_tensors(batch)
-        NMSE = nmse(model, batch)
-        print(NMSE)
     y = model(data[0])
 
 y = y[0, 0, :].detach().cpu().numpy()
