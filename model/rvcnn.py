@@ -1,5 +1,5 @@
-import torch
-from .layers import FEAT_EXTR, ComplexCNN
+import torch, sys
+from .layers import FEAT_EXTR, RealCNN
 from itertools import chain
 
 class RVCNN(torch.nn.Module):
@@ -35,5 +35,6 @@ class RVCNN(torch.nn.Module):
         
     def forward(self, x):
         x_curr = self.feature_extract(x)
-        output = self.nonlin(x_curr)
-        return output[:, :1, :] + 1j * output[:, 1:2, :]
+        x_curr = self.nonlin(x_curr)
+        output = x_curr[:, :1, :] + 1j * x_curr[:, 1:2, :]
+        return output

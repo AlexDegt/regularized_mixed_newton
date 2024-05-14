@@ -87,6 +87,7 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
 
     mu = 1.e-2
     alpha = 1.
+    eps = 1e-4
     lrs = []
     reg_param_curve = []
     learning_curve_train = []
@@ -169,12 +170,12 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
             tmp_loss_val = accum_loss(train_dataset)
             tmp_criterion_val = quality_criterion(model, train_dataset)
 
-        if tmp_loss_val <= loss_val_train:
+        if tmp_loss_val <= loss_val_train + eps:
             mu *= 1.6
             if mu > 1.:
                 mu = 1.
         else:
-            while tmp_loss_val > loss_val_train:
+            while tmp_loss_val > loss_val_train + eps:
                 mu /= 1.2
                 curr_params = x + mu * direction
                 SICOracle.set_flat_params(curr_params, name_list=weight_names)

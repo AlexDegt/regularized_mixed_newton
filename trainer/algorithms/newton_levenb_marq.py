@@ -73,7 +73,7 @@ def train_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderType, va
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(1e+5)
+    epochs = int(3e+3)
 
     if save_every is None:
         save_every = epochs - 1
@@ -84,7 +84,7 @@ def train_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderType, va
 
     mu = 1.
     alpha = 1.
-    eps = 0
+    eps = 1e-4
     reg_param_curve = []
     learning_curve_train = []
     learning_curve_test = []
@@ -126,8 +126,8 @@ def train_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderType, va
 
     epoch = 0
     min_grad_norm = 1e-8
-    # for epoch in range(epochs):
-    while grad_norm is None or grad_norm >= min_grad_norm:
+    for epoch in range(epochs):
+    # while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
         # Accumulate hessian and gradient on the whole training dataset.
         # Combination of all batches on train dataset should be equal validation dataset

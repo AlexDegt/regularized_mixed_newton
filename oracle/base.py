@@ -388,8 +388,8 @@ class Oracle(object):
         grad = torch.bmm(J_H, error_vec)
         hess = torch.bmm(J_H, J)
 
-        grad = torch.mean(grad, keepdim=False, dim=0)
-        hess = torch.mean(hess, keepdim=False, dim=0)
+        grad = torch.sum(grad, keepdim=False, dim=0)
+        hess = torch.sum(hess, keepdim=False, dim=0)
 
         grad.detach_()
         hess.detach_()

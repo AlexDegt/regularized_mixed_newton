@@ -73,7 +73,7 @@ def train_mixed_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderTy
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(1e+5)
+    epochs = int(3e+3)
 
     if save_every is None:
         save_every = epochs - 1
@@ -84,7 +84,7 @@ def train_mixed_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderTy
 
     mu = 1.
     alpha = 1.
-    eps = 0
+    eps = 1e-4
     reg_param_curve = []
     learning_curve_train = []
     learning_curve_test = []
@@ -126,15 +126,15 @@ def train_mixed_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderTy
 
     epoch = 0
     min_grad_norm = 1e-8
-    # for epoch in range(epochs):
-    while grad_norm is None or grad_norm >= min_grad_norm:
+    for epoch in range(epochs):
+    # while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
         # Accumulate hessian and gradient on the whole training dataset.
         # Combination of all batches on train dataset should be equal validation dataset
         for j, batch in enumerate(train_dataset):
 
             delta_hess, delta_grad = SICOracle.direction_through_jacobian(batch, batch_to_tensors, weight_names=weight_names)
-            
+
             with torch.no_grad():
                 if j % chunk_num == 0:
                     hess = torch.zeros_like(delta_hess)
@@ -143,7 +143,7 @@ def train_mixed_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderTy
                 grad += delta_grad
                 del delta_hess, delta_grad
                 torch.cuda.empty_cache()
-                
+
         maxH = hess.abs().max().item()
         regul = torch.eye(hess.size()[0], device=hess.device)
         hess_cond = torch.linalg.cond(hess).item()
@@ -176,6 +176,9 @@ def train_mixed_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderTy
         grad_norm = torch.norm(grad).item()
         grad_norm_curve.append(grad_norm)
         weights_norm_curve.append(torch.norm(curr_params).item())
+
+        if epoch > 290 and epoch <= 315:
+            torch.save(model.state_dict(), save_path + f'weights_{epoch}')
 
         hess_inv.detach()
         hess.detach()
