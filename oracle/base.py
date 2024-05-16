@@ -266,6 +266,7 @@ class Oracle(object):
     @torch.enable_grad()
     def direction_through_jacobian(self, signal_batch: BatchType, batch_to_tensors: BatchTensorType,
                     weight_names: StrOrList = None, compute_fn_val: bool = False, 
+                    strategy: str = "reverse-mode", vectorize: bool = False,
                     return_full_wirtinger_derivative: bool = False, idxs: OptionalTensor = None) -> DerRetType:
         """
         This method computes hessian and gradient values of the loss function and optionally returns loss function value.
@@ -297,28 +298,13 @@ class Oracle(object):
             Tensor: hessian.
             Tensor: gradient.
         """
-
-        if isinstance(signal_batch, Tensor):
-            sample_size = signal_batch.size()[-1]
-            batch_size = tuple(signal_batch.size())[0]
-            resample_ratio = 1
-
-        if isinstance(signal_batch, Iterable):
-            sample_size = signal_batch[0].size()[-1]
-            batch_size = tuple(signal_batch[0].size())[0]
-            resample_ratio = int(sample_size/signal_batch[1].size()[-1])
-
-        if sample_size >= count_parameters(self._model):
-            vectorize = True
-            strategy = 'forward-mode'
-        else:
-            vectorize = False
-            strategy = 'reverse-mode'
+        batch_input, batch_output = batch_to_tensors(signal_batch)[:2]
+        
+        batch_size = batch_output.size()[0]
+        channel_num = torch.tensor(batch_output.size()[1:]).prod().item()
 
         if compute_fn_val:
             loss_val = self.loss_function_val(signal_batch)
-
-        signal_batch_input, signal_batch_output = batch_to_tensors(signal_batch)[:2]
 
         self._model.zero_grad()
 
@@ -329,9 +315,6 @@ class Oracle(object):
                 weight_names = [weight_names]
 
             params = tuple(reduce(getattr, name.split(sep='.'), self._model) for name in weight_names)
-
-        if compute_fn_val:
-            loss_val = self.loss_function_val(signal_batch)
         
         params, names = extract_weights(self._model, weight_names)
 
@@ -345,22 +328,22 @@ class Oracle(object):
                 weights = tuple(
                     re + 1.j * im for re, im in zip(joint_weights[:num_real_params], joint_weights[num_real_params:]))
                 load_weights(self._model, names, weights)
-                return self._model(signal_batch_input)
+                return self._model(batch_input)
 
             J = torch.autograd.functional.jacobian(f_x_y, tuple(joint_params), create_graph=False, vectorize=vectorize, strategy=strategy)
 
-            J = tuple(j.view(batch_size, j.size()[2], -1) for j in J)
+            J = tuple(j.view(*batch_output.size(), -1) for j in J)
 
-            J_x = torch.cat(tuple(j for j in J[:num_real_params]), dim=2)
-            J_y = torch.cat(tuple(j for j in J[num_real_params:]), dim=2)
+            J_x = torch.cat(tuple(j for j in J[:num_real_params]), dim=-1)
+            J_y = torch.cat(tuple(j for j in J[num_real_params:]), dim=-1)
 
             if return_full_wirtinger_derivative:
                 J_z = (J_x - 1.j * J_y) / 2.
                 J_z_conj = (J_x + 1.j * J_y) / 2.
                 if idxs is None:
-                    J = torch.cat((J_z, J_z_conj), dim=2)
+                    J = torch.cat((J_z, J_z_conj), dim=-1)
                 else:
-                    J = torch.cat((J_z[..., idxs], J_z_conj[..., idxs]), dim=2)
+                    J = torch.cat((J_z[..., idxs], J_z_conj[..., idxs]), dim=-1)
             else:
                 if idxs is None:
                     J = (J_x - 1.j * J_y) / 2.
@@ -369,21 +352,25 @@ class Oracle(object):
         else:
             def f(*weights):
                 load_weights(self._model, names, weights)
-                return self._model(signal_batch_input)
+                return self._model(batch_input)
             
             J = torch.autograd.functional.jacobian(f, tuple(params), create_graph=False, vectorize=vectorize, strategy=strategy)
             if idxs is None:
-                J = torch.cat(tuple(j.view(batch_size, j.size()[2], -1) for j in J), dim=2)
+                J = torch.cat(tuple(j.view(*batch_output.size(), -1) for j in J), dim=-1)
             else:
-                J = torch.cat(tuple(j.view(batch_size, j.size()[2], -1) for j in J), dim=2)[..., idxs]
+                J = torch.cat(tuple(j.view(*batch_output.size(), -1) for j in J), dim=-1)[..., idxs]
 
         load_weights(self._model, names, params, is_nn_param=True)
 
-        J_H = torch.conj(torch.permute(J, (0, 2, 1)))            
+        model_output = self._model(batch_input)
         
-        model_output = self._model(signal_batch_input)
+        J = J.view(batch_size, channel_num, -1)
+        model_output = model_output.view(batch_size, channel_num, -1)
+        batch_output = batch_output.view(batch_size, channel_num, -1)
 
-        error_vec = torch.permute(model_output - signal_batch_output, (0, 2, 1))
+        J_H = torch.conj(torch.permute(J, (0, 2, 1)))         
+
+        error_vec = model_output - batch_output
 
         grad = torch.bmm(J_H, error_vec)
         hess = torch.bmm(J_H, J)
@@ -404,7 +391,7 @@ class Oracle(object):
         
         if compute_fn_val:
             return loss_val, hess, grad.view(-1)
-        return hess, grad.view(-1) 
+        return hess, grad.view(-1)
 
     @torch.enable_grad()
     def hessian(self, signal_batch: BatchType, weight_names: StrOrList = None, compute_fn_val: bool = False,
@@ -440,6 +427,7 @@ class Oracle(object):
             float scalar Tensor, optional: The loss function value. This value is nondifferentiable.
             Tensor: The hessian value.
         """
+
         if compute_fn_val:
             loss_val = self.loss_function_val(signal_batch)
         
@@ -467,7 +455,7 @@ class Oracle(object):
             
             H_res = torch.autograd.functional.hessian(f_xx_xy_yy, tuple(joint_params), create_graph=False, vectorize=vectorize,
                                                       outer_jacobian_strategy=outer_jacobian_strategy)
-
+            
             H_res_xx = torch.cat(tuple(torch.cat(_reshape_param_tensor_tuple(row, h_row[:num_real_params]), dim=1)\
                                   for row, h_row in enumerate(H_res[:num_real_params])), dim=0)
             H_res_xy = torch.cat(tuple(torch.cat(_reshape_param_tensor_tuple(row, h_row[num_real_params:]), dim=1)\

@@ -20,15 +20,15 @@ for start_name in start:
     for exp in range(0, 5):
         seed = seed_0 + exp
         # Determine experiment name and create its directory
-        exp_name = f"paper_exp_{exp}_seed_{seed}_" + start_name + "_start_newton_lev_marq_4_channels_3_3_3_1_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1"
-        # exp_name = "test"
+        # exp_name = f"paper_exp_{exp}_seed_{seed}_" + start_name + "_start_newton_lev_marq_4_channels_3_3_3_1_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1"
+        exp_name = "test"
 
         add_folder = os.path.join("")
         curr_path = os.getcwd()
         save_path = os.path.join(curr_path, add_folder, exp_name)
-        os.mkdir(save_path)
+        # os.mkdir(save_path)
 
-        device = "cuda:4"
+        device = "cuda:5"
         # device = "cpu"
         # seed = 964
         torch.manual_seed(seed)
@@ -74,7 +74,7 @@ for start_name in start:
         # block_size == None is equal to block_size = signal length.
         # Block size is the same as chunk size 
         batch_size = 1
-        chunk_num = 1
+        chunk_num = 4
         # chunk_size = int(213504/chunk_num)
         chunk_size = int(0.8 * 213500/chunk_num)
         # L2 regularization parameter
@@ -194,16 +194,20 @@ for start_name in start:
 
         param_init(model)
 
+        # Define jacobian calculation mode. Can influence calculations speed significantly depending on the model structure.
+        # Could be 'forward-mode' or 'reverse-mode'
+        jac_calc_strat = 'reverse-mode'
+
         # Train type shows which algorithm is used for optimization.
         # train_type='sgd_auto' # gradient-based optimizer.
         # train_type='mnm_damped' # Damped Mixed Newton. Work only with models with complex parameters!
-        # train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. Work only with models with complex parameters!
+        train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. Work only with models with complex parameters!
         # train_type='newton_damped' # Damped Newton. Can be used for models with real and complex parameters.
-        train_type='newton_lev_marq' # Levenberg-Marquardt on base of Newton. Can be used for models with real and complex parameters.
+        # train_type='newton_lev_marq' # Levenberg-Marquardt on base of Newton. Can be used for models with real and complex parameters.
         # train_type='cubic_newton' # Cubic Newton. Currently work only with models with complex parameters!
         # train_type='cubic_newton_simple' # Simplified cubic Newton. Currently work only with models with complex parameters!
         learning_curve, best_criterion = train(model, train_dataset, loss, quality_criterion, config_train, batch_to_tensors, validate_dataset, test_dataset, 
                                             train_type=train_type, chunk_num=chunk_num, exp_name=exp_name, save_every=1, save_path=save_path, 
-                                            weight_names=weight_names, device=device)
+                                            weight_names=weight_names, device=device, jac_calc_strat=jac_calc_strat)
 
         print(f"Best NMSE: {best_criterion} dB")
