@@ -73,7 +73,7 @@ def train_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderType, va
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(3e+3)
+    epochs = int(1.5e+3)
 
     if save_every is None:
         save_every = epochs - 1
@@ -84,7 +84,7 @@ def train_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderType, va
 
     mu = 1.
     alpha = 1.
-    eps = 1e-4
+    eps = 1e-6
     reg_param_curve = []
     learning_curve_train = []
     learning_curve_test = []
@@ -170,7 +170,8 @@ def train_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderType, va
                 tmp_criterion_val = quality_criterion(model, train_dataset)
             if tmp_loss_val <= loss_val_train + eps:
                 flag = False
-                alpha /= 3
+                if alpha >= 1e-40:
+                    alpha /= 3
             else:
                 SICOracle.set_flat_params(x, name_list=weight_names)
                 alpha *= 1.1

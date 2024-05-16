@@ -76,7 +76,7 @@ def train_mixed_newton_damped(model: nn.Module, train_dataset: DataLoaderType, v
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(1e+5)
+    epochs = int(1.5e+3)
 
     if save_every is None:
         save_every = epochs - 1
@@ -130,8 +130,8 @@ def train_mixed_newton_damped(model: nn.Module, train_dataset: DataLoaderType, v
    
     epoch = 0
     min_grad_norm = 1e-8
-    # for epoch in range(epochs):
-    while grad_norm is None or grad_norm >= min_grad_norm:
+    for epoch in range(epochs):
+    # while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
         # Accumulate hessian and gradient on the whole training dataset.
         # Combination of all batches on train dataset should be equal validation dataset
