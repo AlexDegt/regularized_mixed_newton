@@ -7,11 +7,11 @@ class CVCNN(torch.nn.Module):
         CVCNN - Complex-Valued Convolutional NN.
         Takes pure signal both channels x_{A, n}, x_{B, n} as an input and 
         creates input features: x_{A, n}, x_{B, n}, |x_{A, n}|, |x_{B, n}|. Thus there're 4 input channels.
-        Output channel numbers are rehulated by the list out_channels.
+        Output channel numbers are regulated by the list out_channels.
         Last layer output channels number equal 1, which corresponds to pre-distorted signal.
     '''
     def __init__(self, delays=[[0]], out_channels=[1, 1], kernel_size=[5, 5],
-        p_drop=None, activate=['sigmoid', 'sigmoid'], batch_norm_mode='nothing', features=['same'],
+        p_drop=None, activate=['sigmoid', 'sigmoid'], batch_norm_mode='nothing', features=['same', 'abs'],
         bias=True, device=None, dtype=torch.complex128):
         super().__init__()
         self._dtype = dtype

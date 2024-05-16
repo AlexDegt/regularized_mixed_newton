@@ -39,7 +39,7 @@ class ResampleDataset(torch.utils.data.Dataset):
         return self.batch_num
 
 def dataset_prepare(mat: dict, dtype: torch.dtype = torch.complex128, device: str = 'cuda', batch_size: OptionalInt = None, 
-                    block_size: OptionalInt = None, slot_num: OptionalInt = None, padding_zeros_num: OptionalInt = None, 
+                    block_size: OptionalInt = None, slot_num: OptionalInt = None, pad_zeros: OptionalInt = None, 
                     delay_d: OptionalInt = None, train_slots_ind: range = range(1), validat_slots_ind: range = range(1),
                     test_slots_ind: range = range(1)) -> DatasetType:
     """
@@ -54,7 +54,7 @@ def dataset_prepare(mat: dict, dtype: torch.dtype = torch.complex128, device: st
         dtype (torch.dtype): The type of tensor to convert content of the mat-file to. Defaults is torch.complex128.
         device (str): The device to load dataset to. Defaults is 'cpu'.
         slot_num (int, optional): The number of slots to divide the whole dataset into.
-        padding_zeros_num (int, optional): The number of zeros to add to the beginning and to the end of the signal.
+        pad_zeros (int, optional): The number of zeros to add to the beginning and to the end of the signal.
         delay_d (int, optional): The value of desired and noise floor signals shift. delay_d > 0 corresponds to
             samples shift left, delay_d < 0 corresponds to samples shift right. If delay_d equal zero or None, 
             then there is no shift. Defaults is "None".
@@ -67,8 +67,8 @@ def dataset_prepare(mat: dict, dtype: torch.dtype = torch.complex128, device: st
         Tuple of iterables.
     """
     
-    if padding_zeros_num is None:
-        padding_zeros_num = 0
+    if pad_zeros is None:
+        pad_zeros = 0
 
     if batch_size is None:
         batch_size = 1
@@ -138,10 +138,10 @@ def dataset_prepare(mat: dict, dtype: torch.dtype = torch.complex128, device: st
     dataset = list()
     
     train_input_set = input[..., train_slots_ind[0] * slot_input_size: train_slots_ind[0] * slot_input_size + input_train_size]
-    train_input_set = F.pad(train_input_set, (padding_zeros_num, padding_zeros_num))
+    train_input_set = F.pad(train_input_set, (pad_zeros, pad_zeros))
     train_target_set = torch.cat((target, nf), dim=1)[..., train_slots_ind[0] * slot_target_size: train_slots_ind[0] * slot_target_size + target_train_size]
 
-    train_input_set = train_input_set.unfold(2, block_size + 2*padding_zeros_num, int(block_size))[0, ...].permute(1, 0, 2)
+    train_input_set = train_input_set.unfold(2, block_size + 2*pad_zeros, int(block_size))[0, ...].permute(1, 0, 2)
     train_target_set = train_target_set.unfold(2, block_size_target, int(block_size_target))[0, ...].permute(1, 0, 2)
     train_set = tuple((train_input_set, train_target_set))
     train_set = ResampleDataset(train_set, batch_size=batch_size)
@@ -149,18 +149,18 @@ def dataset_prepare(mat: dict, dtype: torch.dtype = torch.complex128, device: st
     train_set = torch.utils.data.DataLoader(train_set, batch_size=None)
     
     validat_input_set = input[..., validat_slots_ind[0] * slot_input_size: validat_slots_ind[0] * slot_input_size + input_validat_size]
-    validat_input_set = F.pad(validat_input_set, (padding_zeros_num, padding_zeros_num))
+    validat_input_set = F.pad(validat_input_set, (pad_zeros, pad_zeros))
     validat_target_set = torch.cat((target, nf), dim=1)[..., validat_slots_ind[0] * slot_target_size: validat_slots_ind[0] * slot_target_size + target_validat_size]
-    validat_input_set = validat_input_set.unfold(2, block_size_validat + 2*padding_zeros_num, block_size_validat)[0, ...].permute(1, 0, 2)
+    validat_input_set = validat_input_set.unfold(2, block_size_validat + 2*pad_zeros, block_size_validat)[0, ...].permute(1, 0, 2)
     validat_target_set = validat_target_set.unfold(2, block_size_validat_target, block_size_validat_target)[0, ...].permute(1, 0, 2)
     validat_set = tuple((validat_input_set, validat_target_set))
     validat_set = ResampleDataset(validat_set, batch_size=batch_size)
     validat_set = torch.utils.data.DataLoader(validat_set, batch_size=None)
 
     test_input_set = input[..., test_slots_ind[0] * slot_input_size: test_slots_ind[0] * slot_input_size + input_test_size]
-    test_input_set = F.pad(test_input_set, (padding_zeros_num, padding_zeros_num))
+    test_input_set = F.pad(test_input_set, (pad_zeros, pad_zeros))
     test_target_set = torch.cat((target, nf), dim=1)[..., test_slots_ind[0] * slot_target_size: test_slots_ind[0] * slot_target_size + target_test_size]
-    test_input_set = test_input_set.unfold(2, block_size_test + 2*padding_zeros_num, block_size_test)[0, ...].permute(1, 0, 2)
+    test_input_set = test_input_set.unfold(2, block_size_test + 2*pad_zeros, block_size_test)[0, ...].permute(1, 0, 2)
     test_target_set = test_target_set.unfold(2, block_size_test_target, block_size_test_target)[0, ...].permute(1, 0, 2)
     test_set = tuple((test_input_set, test_target_set))
     test_set = ResampleDataset(test_set, batch_size=batch_size)
