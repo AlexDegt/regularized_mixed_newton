@@ -23,6 +23,7 @@ y_test_scaled = scaler.transform(y_test)
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = 'cuda:5'
+# device = 'cpu'
 
 X_train_tensor = torch.tensor(X_train, dtype=torch.float32).unsqueeze(-1).to(device)
 y_train_tensor = torch.tensor(y_train_scaled, dtype=torch.float32).unsqueeze(-1).to(device)
@@ -104,6 +105,8 @@ complex_weights = False
 # train_type = 'mnm_lev_marq'
 # train_type = 'sgd_auto'
 train_type = 'newton_lev_marq'
+# train_type = 'newton_damped'
+# train_type = 'cubic_newton'
 random_seed = 1
 # Define jacobian calculation mode. Can influence calculations speed significantly depending on the model structure.
 # Could be 'forward-mode' or 'reverse-mode'

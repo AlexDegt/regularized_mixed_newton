@@ -17,16 +17,17 @@ seed_0 = 964
 # start = ['real']
 start = ['imag']
 for start_name in start:
-    for exp in range(0, 5):
+    for exp in range(0, 1):
         seed = seed_0 + exp
         # Determine experiment name and create its directory
         # exp_name = f"paper_exp_{exp}_seed_{seed}_" + start_name + "_start_newton_lev_marq_4_channels_3_3_3_1_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1"
-        exp_name = "test"
+        # exp_name = "test"
+        exp_name = "cubic_newton_first"
 
         add_folder = os.path.join("")
         curr_path = os.getcwd()
         save_path = os.path.join(curr_path, add_folder, exp_name)
-        # os.mkdir(save_path)
+        os.mkdir(save_path)
 
         device = "cuda:5"
         # device = "cpu"
@@ -196,15 +197,15 @@ for start_name in start:
 
         # Define jacobian calculation mode. Can influence calculations speed significantly depending on the model structure.
         # Could be 'forward-mode' or 'reverse-mode'
-        jac_calc_strat = 'reverse-mode'
-
+        jac_calc_strat = 'forward-mode'
+        
         # Train type shows which algorithm is used for optimization.
         # train_type='sgd_auto' # gradient-based optimizer.
         # train_type='mnm_damped' # Damped Mixed Newton. Work only with models with complex parameters!
-        train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. Work only with models with complex parameters!
+        # train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. Work only with models with complex parameters!
         # train_type='newton_damped' # Damped Newton. Can be used for models with real and complex parameters.
         # train_type='newton_lev_marq' # Levenberg-Marquardt on base of Newton. Can be used for models with real and complex parameters.
-        # train_type='cubic_newton' # Cubic Newton. Currently work only with models with complex parameters!
+        train_type='cubic_newton' # Cubic Newton. Currently work only with models with complex parameters!
         # train_type='cubic_newton_simple' # Simplified cubic Newton. Currently work only with models with complex parameters!
         learning_curve, best_criterion = train(model, train_dataset, loss, quality_criterion, config_train, batch_to_tensors, validate_dataset, test_dataset, 
                                             train_type=train_type, chunk_num=chunk_num, exp_name=exp_name, save_every=1, save_path=save_path, 

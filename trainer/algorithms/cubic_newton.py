@@ -40,8 +40,6 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvec
     delta_max, delta_min, delta = np.inf, tmp, 100
     while True:
         direction = get_direction_delta(delta)
-        # Track direction value
-        # print(direction)
         error = delta ** 2 - torch.norm(direction) ** 2
         if abs(error) <= tol or delta_max-delta_min < tol/1e4:
             return delta, direction
@@ -203,14 +201,6 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
             lin_part = 2 * (grad * direction.conj()).sum()
             quad_part = ((hess @ direction) * direction.conj()).sum()
             cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 3 / 6
-            # Track algorithm parameters
-            print(f"Validation loss: {tmp_loss_val:.4e}")
-            print(f"Cube estimation: {cube_estimation.item():.4e}")
-            print(f"Delta {delta:.4e}")
-            print(f"linear part: {lin_part}")
-            print(f"quadratic part: {quad_part}")
-            print(f"lipschitz const: {lipschitz_constant}")
-            print(f"Hessian condition: {hess_cond:.4e}")
             if tmp_loss_val.real > cube_estimation.real:
                 lipschitz_constant *= 1.5
             else:
