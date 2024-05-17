@@ -45,14 +45,14 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvec
         error = delta ** 2 - torch.norm(direction) ** 2
         if abs(error) <= tol or delta_max-delta_min < tol/1e4:
             return delta, direction
-        delta_max, delta_min, delta = update_delta(error, delta_max, delta_min, delta)
+        delta_max, delta_min, delta = update_delta(error, delta_min, delta_max, delta)
 
 
 def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate_dataset: DataLoaderType,
                               test_dataset: DataLoaderType, loss_fn: LossFnType, quality_criterion: LossFnType, 
                               batch_to_tensors: BatchTensorType, chunk_num: OptionalInt = None, 
                               save_path: OptionalStr = None, exp_name: OptionalStr = None, save_every: OptionalInt = None, 
-                              save_signals: bool = False, weight_names: StrOrList = None):
+                              save_signals: bool = False, weight_names: StrOrList = None, jac_calc_strat: str = "reverse-mode"):
     """
     Function implements damped version of Mixed Newton Method. Mixed Newton implies computation of the mixed Hessian and
     gradient multiplication each algorithm step. Current function uses oracle.Oracle.direction_through_jacobian
@@ -111,6 +111,14 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
     if save_every is None:
         save_every = epochs - 1
 
+    # Determine jacobian calculation strategy
+    if jac_calc_strat == 'forward-mode':
+        vectorize = True
+    elif jac_calc_strat == 'reverse-mode':
+        vectorize = False
+    else:
+        sys.exit(f'Jacobian calculation strategu must be \'forward-mode\' or \'reverse-mode\', but {jac_calc_strat} is given.')
+
     epoch, print_every = 0, 1
 
     SICOracle = Oracle(model, loss_fn)
@@ -143,17 +151,17 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         best_criterion_test = criterion_val_test
         learning_curve_test.append(loss_val_test)
         learning_curve_test_qcrit.append(criterion_val_test)
-        print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f} dB.".format(loss_val_test, criterion_val_test))
+        print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f}.".format(loss_val_test, criterion_val_test))
         loss_val_train = accum_loss(train_dataset)
         criterion_val_train = quality_criterion(model, train_dataset)
         learning_curve_train.append(loss_val_train)   
         learning_curve_train_qcrit.append(criterion_val_train)
-        print("Begin: loss = {:.4e}, quality_criterion_train = {:.8f} dB.".format(loss_val_train, criterion_val_train))
+        print("Begin: loss = {:.4e}, quality_criterion_train = {:.8f}.".format(loss_val_train, criterion_val_train))
         loss_val_validate = accum_loss(validate_dataset)
         criterion_val_validate = quality_criterion(model, validate_dataset)
         learning_curve_validate.append(loss_val_validate)
         learning_curve_validate_qcrit.append(criterion_val_validate)
-        print("Begin: loss = {:.4e}, quality_criterion_validate = {:.8f} dB.".format(loss_val_validate, criterion_val_validate))
+        print("Begin: loss = {:.4e}, quality_criterion_validate = {:.8f}.".format(loss_val_validate, criterion_val_validate))
     
     epoch = 0
     min_grad_norm = 1e-8 
@@ -165,7 +173,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         for j, batch in enumerate(train_dataset):
 
             delta_hess = SICOracle.hessian(batch, weight_names=weight_names, return_full_real_derivative=False,
-                            return_for_cubic_newton=True, outer_jacobian_strategy='forward-mode', vectorize=True)
+                            return_for_cubic_newton=True, outer_jacobian_strategy=jac_calc_strat, vectorize=vectorize)
             delta_grad = SICOracle.gradient(batch, weight_names=weight_names, return_full_real_derivative=False,
                             strategy='reverse-mode', vectorize=False)
 
@@ -251,7 +259,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         if epoch % print_every == 0:
             print(f"Epoch is {epoch + 1}, " + \
                 f"loss_train = {loss_val_train:.8f}, " + \
-                f"quality_criterion_train = {criterion_val_train:.8f} dB, stepsize = {mu:.6e}, " + \
+                f"quality_criterion_train = {criterion_val_train:.8f}, stepsize = {mu:.6e}, " + \
                 f"|grad| = {grad_norm:.4e}, time elapsed: {timer.interval:.2e}, " + \
                 f"regular param = {reg_param_curve[-1]:.4e}, " + \
                 f"Hessian conditioning: {hess_cond:.4e}")

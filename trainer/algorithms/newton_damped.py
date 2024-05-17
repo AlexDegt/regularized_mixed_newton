@@ -22,7 +22,7 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
                               test_dataset: DataLoaderType, loss_fn: LossFnType, quality_criterion: LossFnType, 
                               batch_to_tensors: BatchTensorType, chunk_num: OptionalInt = None, 
                               save_path: OptionalStr = None, exp_name: OptionalStr = None, save_every: OptionalInt = None, 
-                              save_signals: bool = False, weight_names: StrOrList = None):
+                              save_signals: bool = False, weight_names: StrOrList = None, jac_calc_strat: str = "reverse-mode"):
     """
     Function implements damped version of Mixed Newton Method. Mixed Newton implies computation of the mixed Hessian and
     gradient multiplication each algorithm step. Current function uses oracle.Oracle.direction_through_jacobian
@@ -76,10 +76,18 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(1e+5)
+    epochs = int(1.5e+3)
 
     if save_every is None:
         save_every = epochs - 1
+
+    # Determine jacobian calculation strategy
+    if jac_calc_strat == 'forward-mode':
+        vectorize = True
+    elif jac_calc_strat == 'reverse-mode':
+        vectorize = False
+    else:
+        sys.exit(f'Jacobian calculation strategu must be \'forward-mode\' or \'reverse-mode\', but {jac_calc_strat} is given.')
 
     epoch, print_every = 0, 1
 
@@ -87,6 +95,7 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
 
     mu = 1.e-2
     alpha = 1.
+    eps = 1e-4
     lrs = []
     reg_param_curve = []
     learning_curve_train = []
@@ -115,29 +124,29 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
         best_criterion_test = criterion_val_test
         learning_curve_test.append(loss_val_test)
         learning_curve_test_qcrit.append(criterion_val_test)
-        print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f} dB.".format(loss_val_test, criterion_val_test))
+        print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f}.".format(loss_val_test, criterion_val_test))
         loss_val_train = accum_loss(train_dataset)
         criterion_val_train = quality_criterion(model, train_dataset)
         learning_curve_train.append(loss_val_train)   
         learning_curve_train_qcrit.append(criterion_val_train)
-        print("Begin: loss = {:.4e}, quality_criterion_train = {:.8f} dB.".format(loss_val_train, criterion_val_train))
+        print("Begin: loss = {:.4e}, quality_criterion_train = {:.8f}.".format(loss_val_train, criterion_val_train))
         loss_val_validate = accum_loss(validate_dataset)
         criterion_val_validate = quality_criterion(model, validate_dataset)
         learning_curve_validate.append(loss_val_validate)
         learning_curve_validate_qcrit.append(criterion_val_validate)
-        print("Begin: loss = {:.4e}, quality_criterion_validate = {:.8f} dB.".format(loss_val_validate, criterion_val_validate))
+        print("Begin: loss = {:.4e}, quality_criterion_validate = {:.8f}.".format(loss_val_validate, criterion_val_validate))
    
     epoch = 0
     min_grad_norm = 1e-8
-    # for epoch in range(epochs):
-    while grad_norm is None or grad_norm >= min_grad_norm:
+    for epoch in range(epochs):
+    # while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
         # Accumulate hessian and gradient on the whole training dataset.
         # Combination of all batches on train dataset should be equal validation dataset
         for j, batch in enumerate(train_dataset):
 
             delta_hess = SICOracle.hessian(batch, weight_names=weight_names, return_full_real_derivative=True,
-                            return_for_cubic_newton=False, outer_jacobian_strategy='forward-mode', vectorize=True)
+                            return_for_cubic_newton=False, outer_jacobian_strategy=jac_calc_strat, vectorize=vectorize)
             delta_grad = SICOracle.gradient(batch, weight_names=weight_names, return_full_real_derivative=True,
                             strategy='reverse-mode', vectorize=False)
             
@@ -169,12 +178,12 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
             tmp_loss_val = accum_loss(train_dataset)
             tmp_criterion_val = quality_criterion(model, train_dataset)
 
-        if tmp_loss_val <= loss_val_train:
+        if tmp_loss_val <= loss_val_train + eps:
             mu *= 1.6
             if mu > 1.:
                 mu = 1.
         else:
-            while tmp_loss_val > loss_val_train:
+            while tmp_loss_val > loss_val_train + eps:
                 mu /= 1.2
                 curr_params = x + mu * direction
                 SICOracle.set_flat_params(curr_params, name_list=weight_names)
@@ -182,7 +191,7 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
                     tmp_loss_val = accum_loss(train_dataset)
                     tmp_criterion_val = quality_criterion(model, train_dataset)
                 if epoch % print_every == 0:
-                    print(f"Deverges, epoch is {epoch + 1}, quality_criterion_train = {tmp_criterion_val:.8f} dB," + \
+                    print(f"Deverges, epoch is {epoch + 1}, quality_criterion_train = {tmp_criterion_val:.8f}," + \
                             f"loss_val = {tmp_loss_val:.4f}, stepsize = {mu:.6e}")
         loss_val_train = tmp_loss_val
         criterion_val_train = tmp_criterion_val
@@ -231,7 +240,7 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
         if epoch % print_every == 0:
             print(f"Epoch is {epoch + 1}, " + \
                 f"loss_train = {loss_val_train:.8f}, " + \
-                f"quality_criterion_train = {criterion_val_train:.8f} dB, stepsize = {lrs[-1]:.6e}, " + \
+                f"quality_criterion_train = {criterion_val_train:.8f}, stepsize = {lrs[-1]:.6e}, " + \
                 f"|grad| = {grad_norm:.4e}, time elapsed: {timer.interval:.2e}," + \
                 f"Hessian conditioning: {hess_cond:.4e}")
         epoch += 1

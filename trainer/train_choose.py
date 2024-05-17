@@ -18,7 +18,7 @@ def train(model: nn.Module, train_dataset: DataLoaderType, loss_fn: LossFnType, 
           config_train: dict, batch_to_tensors: OptionalBatchTensor = None, validate_dataset: OptionalDataLoader = None, 
           test_dataset: OptionalDataLoader = None, train_type: OptionalStr = None,
           save_path: OptionalStr = None, exp_name: OptionalStr = None, save_every: OptionalInt = None, 
-          chunk_num: OptionalInt = None, weight_names: StrOrList = None, device: OptionalStr = None) -> None:
+          chunk_num: OptionalInt = None, weight_names: StrOrList = None, device: OptionalStr = None, jac_calc_strat: str = "reverse-mode") -> None:
     """
     This function activates model training functions depending on the required training type.
 
@@ -75,6 +75,7 @@ def train(model: nn.Module, train_dataset: DataLoaderType, loss_fn: LossFnType, 
         train_type = 'sgd_auto'
 
     best_criterion = None
+    learning_curve = []
 
     save_signals = True
     
@@ -91,27 +92,27 @@ def train(model: nn.Module, train_dataset: DataLoaderType, loss_fn: LossFnType, 
     elif train_type == 'mnm_damped':
         learning_curve, best_criterion = train_mixed_newton_damped(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                    quality_criterion, batch_to_tensors, chunk_num, 
-                                                                   save_path, exp_name, save_every, save_signals, weight_names)
+                                                                   save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
     elif train_type == 'mnm_lev_marq':
         learning_curve, best_criterion = train_mixed_newton_levenb_marq(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                         quality_criterion, batch_to_tensors, chunk_num, 
-                                                                        save_path, exp_name, save_every, save_signals, weight_names)
+                                                                        save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
     elif train_type == 'newton_damped':
         learning_curve, best_criterion = train_newton_damped(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                    quality_criterion, batch_to_tensors, chunk_num, 
-                                                                   save_path, exp_name, save_every, save_signals, weight_names)
+                                                                   save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
     elif train_type == 'newton_lev_marq':
         learning_curve, best_criterion = train_newton_levenb_marq(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                         quality_criterion, batch_to_tensors, chunk_num, 
-                                                                        save_path, exp_name, save_every, save_signals, weight_names)
+                                                                        save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
     elif train_type == 'cubic_newton':
         learning_curve, best_criterion = train_cubic_newton(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                    quality_criterion, batch_to_tensors, chunk_num, 
-                                                                   save_path, exp_name, save_every, save_signals, weight_names)
+                                                                   save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
     elif train_type == 'cubic_newton_simple':
         learning_curve, best_criterion = train_cubic_newton_simplified(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                         quality_criterion, batch_to_tensors, chunk_num, 
-                                                                        save_path, exp_name, save_every, save_signals, weight_names)
+                                                                        save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
     else:
-        print(f"Attention! Training type \'{train_type}\' doesn`t match any of the possible types: \'sgd\', \'mnm\'.")
+        print(f"Attention! Training type \'{train_type}\' doesn`t match any of the possible types.")
     return learning_curve, best_criterion
