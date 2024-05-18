@@ -43,7 +43,7 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvec
         error = delta ** 2 - torch.norm(direction) ** 2
         if abs(error) <= tol or delta_max-delta_min < tol/1e4:
             return delta, direction
-        delta_max, delta_min, delta = update_delta(error, delta_max, delta_min, delta)
+        delta_max, delta_min, delta = update_delta(error, delta_min, delta_max, delta)
 
 
 def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderType, validate_dataset: DataLoaderType,
@@ -191,7 +191,7 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
             lin_part = 2 * (grad * direction.conj()).sum()
             quad_part = ((hess @ direction) * direction.conj()).sum()
             cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 2 * (1 + delta / 6)
-            if tmp_loss_val.real > cube_estimation.real:
+            if tmp_loss_val.real > cube_estimation.real or tmp_loss_val.real > loss_val_train.real:
                 lipschitz_constant *= 1.5
             else:
                 break

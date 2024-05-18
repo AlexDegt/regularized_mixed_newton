@@ -203,7 +203,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
             print(f"quadratic part: {quad_part}")
             print(f"lipschitz const: {lipschitz_constant}")
             print(f"Hessian condition: {hess_cond:.4e}")
-            if tmp_loss_val.real > cube_estimation.real:
+            if tmp_loss_val.real > cube_estimation.real or tmp_loss_val.real > loss_val_train.real:
                 lipschitz_constant *= 1.5
             else:
                 break
