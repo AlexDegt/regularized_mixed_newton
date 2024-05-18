@@ -82,7 +82,7 @@ def train_sgd_manual(model: nn.Module, train_dataset: DataLoaderType, validate_d
             loss_val = loss_fn(model, batch)
             criterion_val_test = quality_criterion(model, batch)
             best_criterion = criterion_val_test
-            print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f} dB.".format(loss_val.item(), criterion_val_test))
+            print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f}.".format(loss_val.item(), criterion_val_test))
             break
     for epoch in range(epochs):
         for j, batch in enumerate(train_dataset):
@@ -124,8 +124,8 @@ def train_sgd_manual(model: nn.Module, train_dataset: DataLoaderType, validate_d
                 np.save(save_path + f'lrs{exp_name}.npy', np.array(lrs))
         timer.__exit__()
         if epoch % print_every == 0:
-            print(f"Epoch is {epoch + 1}, quality_criterion_test = {criterion_val_test:.8f} dB, " + \
-                  f"quality_criterion_validat = {criterion_val_validat:.8f} dB, stepsize = {lrs[-1]:.6e}, " + \
+            print(f"Epoch is {epoch + 1}, quality_criterion_test = {criterion_val_test:.8f}, " + \
+                  f"quality_criterion_validat = {criterion_val_validat:.8f}, stepsize = {lrs[-1]:.6e}, " + \
                   f"|grad| = {grad_norm:.4e}, time elapsed: {timer.interval:.2e}")
 
         general_timer.__exit__()
