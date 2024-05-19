@@ -73,7 +73,7 @@ def train_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderType, va
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(1.5e+3)
+    epochs = int(2.e+2)
 
     if save_every is None:
         save_every = epochs - 1
