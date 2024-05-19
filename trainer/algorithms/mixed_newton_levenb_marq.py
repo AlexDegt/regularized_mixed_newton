@@ -175,9 +175,9 @@ def train_mixed_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderTy
             else:
                 SICOracle.set_flat_params(x, name_list=weight_names)
                 alpha *= 1.1
-                if epoch % print_every == 0:
-                    print(f"Deverges, epoch is {epoch + 1}, quality_criterion_train = {tmp_criterion_val:.4f}," + \
-                          f"loss_val = {tmp_loss_val:.4f}, stepsize = {mu:.6e}, reg_param = {alpha:.4e}")
+                # if epoch % print_every == 0:
+                #     print(f"Deverges, epoch is {epoch + 1}, quality_criterion_train = {tmp_criterion_val:.4f}," + \
+                #           f"loss_val = {tmp_loss_val:.4f}, stepsize = {mu:.6e}, reg_param = {alpha:.4e}")
         loss_val_train = tmp_loss_val
         criterion_val_train = tmp_criterion_val
 
