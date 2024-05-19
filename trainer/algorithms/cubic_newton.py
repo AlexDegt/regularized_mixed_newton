@@ -201,7 +201,15 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
             lin_part = 2 * (grad * direction.conj()).sum()
             quad_part = ((hess @ direction) * direction.conj()).sum()
             cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 3 / 6
-            if tmp_loss_val.real > cube_estimation.real:
+            # Track algorithm parameters
+            print(f"Validation loss: {tmp_loss_val:.4e}")
+            print(f"Cube estimation: {cube_estimation.item():.4e}")
+            print(f"Delta {delta:.4e}")
+            print(f"linear part: {lin_part}")
+            print(f"quadratic part: {quad_part}")
+            print(f"lipschitz const: {lipschitz_constant}")
+            print(f"Hessian condition: {hess_cond:.4e}")
+            if tmp_loss_val.real > cube_estimation.real or tmp_loss_val.real > loss_val_train.real:
                 lipschitz_constant *= 1.5
             else:
                 break

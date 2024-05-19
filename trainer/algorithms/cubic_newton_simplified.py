@@ -200,7 +200,7 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
             lin_part = 2 * (grad * direction.conj()).sum()
             quad_part = ((hess @ direction) * direction.conj()).sum()
             cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 2 * (1 + delta / 6)
-            if tmp_loss_val.real > cube_estimation.real:
+            if tmp_loss_val.real > cube_estimation.real or tmp_loss_val.real > loss_val_train.real:
                 lipschitz_constant *= 1.5
             else:
                 break
