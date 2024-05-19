@@ -34,7 +34,7 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvec
     def get_direction_delta(delta):
         diag_values = eigenvalues_hess + lipschitz_constant * delta / 4
         return -eigenvectors_hess @ (1 / diag_values * eigenvectors_gradient_product)
-    tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0).cpu().item()
+    tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0)
     if isinstance(tmp, torch.Tensor):
         tmp = tmp.cpu().item()
     delta_max, delta_min, delta = np.inf, tmp, 100

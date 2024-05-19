@@ -34,7 +34,7 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvec
     def get_direction_delta(delta):
         diag_values = eigenvalues_hess + lipschitz_constant * delta / 4
         return -eigenvectors_hess @ (1 / diag_values * eigenvectors_gradient_product)
-    tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0).cpu().item()
+    tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0)
     if isinstance(tmp, torch.Tensor):
         tmp = tmp.cpu().item()
     delta_max, delta_min, delta = np.inf, tmp, 100
@@ -104,7 +104,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(1e+5)
+    epochs = int(1.5e+3)
 
     if save_every is None:
         save_every = epochs - 1
@@ -163,8 +163,8 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
     
     epoch = 0
     min_grad_norm = 1e-8 
-    # for epoch in range(3):
-    while grad_norm is None or grad_norm >= min_grad_norm:
+    for epoch in range(epochs):
+    # while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
         # Accumulate hessian and gradient on the whole training dataset.
         # Combination of all batches on train dataset should be equal validation dataset
@@ -201,14 +201,6 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
             lin_part = 2 * (grad * direction.conj()).sum()
             quad_part = ((hess @ direction) * direction.conj()).sum()
             cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 3 / 6
-            # Track algorithm parameters
-            print(f"Validation loss: {tmp_loss_val:.4e}")
-            print(f"Cube estimation: {cube_estimation.item():.4e}")
-            print(f"Delta {delta:.4e}")
-            print(f"linear part: {lin_part}")
-            print(f"quadratic part: {quad_part}")
-            print(f"lipschitz const: {lipschitz_constant}")
-            print(f"Hessian condition: {hess_cond:.4e}")
             if tmp_loss_val.real > cube_estimation.real or tmp_loss_val.real > loss_val_train.real:
                 lipschitz_constant *= 1.5
             else:
