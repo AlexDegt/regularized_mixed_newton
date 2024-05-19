@@ -13,11 +13,11 @@ from scipy.io import loadmat
 from model import CVCNN
 
 seed_0 = 964
-start = ['complex']
+start = ['complex', 'real', 'imag']
 # start = ['real']
 # start = ['imag']
 for start_name in start:
-    for exp in range(0, 1):
+    for exp in range(0, 5):
         seed = seed_0 + exp
         # Determine experiment name and create its directory
         exp_name = f"paper_exp_{exp}_seed_{seed}_" + start_name + "_start_simple_cubic_newton_4_channels_3_3_3_1_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1"
@@ -29,7 +29,7 @@ for start_name in start:
         save_path = os.path.join(curr_path, add_folder, exp_name)
         os.mkdir(save_path)
 
-        device = "cuda:2"
+        device = "cuda:4"
         # device = "cpu"
         # seed = 964
         torch.manual_seed(seed)

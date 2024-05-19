@@ -104,7 +104,7 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(1e+5)
+    epochs = int(1.5e+3)
 
     if save_every is None:
         save_every = epochs - 1
@@ -163,8 +163,8 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
 
     epoch = 0
     min_grad_norm = 1e-8    
-    # for epoch in range(epochs):
-    while grad_norm is None or grad_norm >= min_grad_norm:
+    for epoch in range(epochs):
+    # while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
         # Accumulate hessian and gradient on the whole training dataset.
         # Combination of all batches on train dataset should be equal validation dataset
@@ -199,6 +199,9 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
                 tmp_loss_val = accum_loss(train_dataset)
             lin_part = 2 * (grad * direction.conj()).sum()
             quad_part = ((hess @ direction) * direction.conj()).sum()
+            # Check whether model parameters are complex or not
+            if not torch.is_complex(direction):
+                lin_part /= 2
             cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 2 * (1 + delta / 6)
             if tmp_loss_val.real > cube_estimation.real or tmp_loss_val.real > loss_val_train.real:
                 lipschitz_constant *= 1.5
