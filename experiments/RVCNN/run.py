@@ -13,10 +13,10 @@ from scipy.io import loadmat
 from model import RVCNN
 
 seed_0 = 964
-for exp in range(0, 5):
+for exp in range(1, 5):
     seed = seed_0 + exp
     # Determine experiment name and create its directory
-    exp_name = f"paper_exp_{exp}_seed_{seed}_cubic_newton_4_channels_6_5_5_2_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_2"
+    exp_name = f"paper_exp_{exp}_seed_{seed}_cubic_newton_4_channels_6_5_5_2_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_4"
     # exp_name = "test"
 
     add_folder = os.path.join("")
@@ -24,7 +24,7 @@ for exp in range(0, 5):
     save_path = os.path.join(curr_path, add_folder, exp_name)
     os.mkdir(save_path)
 
-    device = "cuda:5"
+    device = "cuda:4"
     # device = "cpu"
     # seed = 964
     torch.manual_seed(seed)
@@ -72,7 +72,7 @@ for exp in range(0, 5):
     # block_size == None is equal to block_size = signal length.
     # Block size is the same as chunk size 
     batch_size = 1
-    chunk_num = 2
+    chunk_num = 4
     # chunk_size = int(213504/chunk_num)
     chunk_size = int(0.8 * 213500/chunk_num)
     # L2 regularization parameter
