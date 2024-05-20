@@ -34,7 +34,7 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvec
     def get_direction_delta(delta):
         diag_values = eigenvalues_hess + lipschitz_constant * delta / 4
         return -eigenvectors_hess @ (1 / diag_values * eigenvectors_gradient_product)
-    tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0).cpu().item()
+    tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0)
     if isinstance(tmp, torch.Tensor):
         tmp = tmp.cpu().item()
     delta_max, delta_min, delta = np.inf, tmp, 100
@@ -43,7 +43,7 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvec
         error = delta ** 2 - torch.norm(direction) ** 2
         if abs(error) <= tol or delta_max-delta_min < tol/1e4:
             return delta, direction
-        delta_max, delta_min, delta = update_delta(error, delta_max, delta_min, delta)
+        delta_max, delta_min, delta = update_delta(error, delta_min, delta_max, delta)
 
 
 def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderType, validate_dataset: DataLoaderType,
@@ -104,7 +104,7 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(1e+5)
+    epochs = int(1.5e+3)
 
     if save_every is None:
         save_every = epochs - 1
@@ -163,8 +163,8 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
 
     epoch = 0
     min_grad_norm = 1e-8    
-    # for epoch in range(epochs):
-    while grad_norm is None or grad_norm >= min_grad_norm:
+    for epoch in range(epochs):
+    # while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
         # Accumulate hessian and gradient on the whole training dataset.
         # Combination of all batches on train dataset should be equal validation dataset
@@ -199,8 +199,11 @@ def train_cubic_newton_simplified(model: nn.Module, train_dataset: DataLoaderTyp
                 tmp_loss_val = accum_loss(train_dataset)
             lin_part = 2 * (grad * direction.conj()).sum()
             quad_part = ((hess @ direction) * direction.conj()).sum()
+            # Check whether model parameters are complex or not
+            if not torch.is_complex(direction):
+                lin_part /= 2
             cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 2 * (1 + delta / 6)
-            if tmp_loss_val.real > cube_estimation.real:
+            if tmp_loss_val.real > cube_estimation.real or tmp_loss_val.real > loss_val_train.real:
                 lipschitz_constant *= 1.5
             else:
                 break
