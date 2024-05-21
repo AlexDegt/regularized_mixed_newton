@@ -20,8 +20,8 @@ for start_name in start:
     for exp in range(4, 5):
         seed = seed_0 + exp
         # Determine experiment name and create its directory
-        exp_name = f"paper_exp_{exp}_seed_{seed}_" + start_name + "_start_cubic_newton_4_channels_3_3_3_1_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_2"
-        # exp_name = "test"
+        # exp_name = f"paper_exp_{exp}_seed_{seed}_" + start_name + "_start_cubic_newton_4_channels_3_3_3_1_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_2"
+        exp_name = "test"
         # exp_name = "cubic_newton_first"
 
         add_folder = os.path.join("")
@@ -29,7 +29,7 @@ for start_name in start:
         save_path = os.path.join(curr_path, add_folder, exp_name)
         os.mkdir(save_path)
 
-        device = "cuda:5"
+        device = "cuda:4"
         # device = "cpu"
         # seed = 964
         torch.manual_seed(seed)
@@ -75,7 +75,7 @@ for start_name in start:
         # block_size == None is equal to block_size = signal length.
         # Block size is the same as chunk size 
         batch_size = 1
-        chunk_num = 2
+        chunk_num = 1
         # chunk_size = int(213504/chunk_num)
         chunk_size = int(0.8 * 213500/chunk_num)
         # L2 regularization parameter
