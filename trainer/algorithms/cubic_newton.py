@@ -104,7 +104,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(200)
+    epochs = int(300)
 
     if save_every is None:
         save_every = epochs - 1
