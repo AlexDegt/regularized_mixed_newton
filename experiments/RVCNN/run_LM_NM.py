@@ -13,18 +13,18 @@ from scipy.io import loadmat
 from model import RVCNN
 
 seed_0 = 964
-for exp in range(1, 5):
+for exp in range(0, 5):
     seed = seed_0 + exp
     # Determine experiment name and create its directory
-    # exp_name = f"paper_exp_{exp}_seed_{seed}_cubic_newton_4_channels_6_5_5_2_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_4"
-    exp_name = "test"
+    exp_name = f"paper_exp_{exp}_seed_{seed}_cubic_newton_4_channels_6_5_5_2_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1"
+    # exp_name = "test"
 
     add_folder = os.path.join("")
     curr_path = os.getcwd()
     save_path = os.path.join(curr_path, add_folder, exp_name)
     os.mkdir(save_path)
 
-    device = "cuda:4"
+    device = "cuda:0"
     # device = "cpu"
     # seed = 964
     torch.manual_seed(seed)
@@ -89,15 +89,6 @@ for exp in range(1, 5):
                             pad_zeros=pad_zeros, batch_size=batch_size, block_size=chunk_size)
 
     train_dataset, validate_dataset, test_dataset = dataset
-
-    # Show sizes of batches in train dataset, size of validation and test dataset
-    # for i in range(len(dataset)):
-    #     for j, batch in enumerate(dataset[i]):
-    #         # if j == 0:
-    #         print(batch[0].size())
-    #         print(batch[1].size())
-    #     print(j)
-    # sys.exit()
 
     # Attention here!!! 2 channels of signal can be pre-distorted.
     # In order to pre-distort channel A, desired signal d should be chosen as: d = a[1][:, :1, :].
@@ -196,8 +187,8 @@ for exp in range(1, 5):
     # train_type='mnm_damped' # Damped Mixed Newton. Work only with models with complex parameters!
     # train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. Work only with models with complex parameters!
     # train_type='newton_damped' # Damped Newton. Can be used for models with real and complex parameters.
-    # train_type='newton_lev_marq' # Levenberg-Marquardt on base of Newton. Can be used for models with real and complex parameters.
-    train_type='cubic_newton' # Cubic Newton. Currently work only with models with complex parameters!
+    train_type='newton_lev_marq' # Levenberg-Marquardt on base of Newton. Can be used for models with real and complex parameters.
+    # train_type='cubic_newton' # Cubic Newton. Currently work only with models with complex parameters!
     # train_type='cubic_newton_simple' # Simplified cubic Newton. Currently work only with models with complex parameters!
     learning_curve, best_criterion = train(model, train_dataset, loss, quality_criterion, config_train, batch_to_tensors, validate_dataset, test_dataset, 
                                         train_type=train_type, chunk_num=chunk_num, exp_name=exp_name, save_every=1, save_path=save_path, 

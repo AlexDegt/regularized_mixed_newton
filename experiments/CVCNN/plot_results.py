@@ -3,7 +3,6 @@ import os, sys
 sys.path.append('../../')
 from utils import plot_psd, nmse
 
-%matplotlib inline
 import matplotlib
 
 import numpy as np
@@ -12,7 +11,7 @@ import scipy.signal as signal
 
 # Determine experiment name and create its directory
 seed_0 = 964
-figure = 1
+figure = 10
 epochs = 1500
 exp_num = 5
 linewidth = 1
@@ -43,42 +42,39 @@ for j_method, method in enumerate(methods):
     lc_min[j_method, :] = 20*np.log10(np.min(10**(lc_train[j_method, :, :]/20), axis=0))
     lc_max[j_method, :] = 20*np.log10(np.max(10**(lc_train[j_method, :, :]/20), axis=0))
 
+colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#9467bd']
+# colors = ['#1f77b4', '#9467bd', '#2ca02c', '#ff7f0e']
+alpha=0.12
+
 plt.figure(figure)
 
-plt.plot(lc_min[0, :], color='red', linestyle='dashed', label='mnm_min', linewidth=linewidth)
-plt.plot(lc_aver[0, :], color='red', linestyle='solid', label='mnm_aver', linewidth=linewidth)
-plt.plot(lc_max[0, :], color='red', linestyle='dashed', label='mnm_max', linewidth=linewidth)
+plt.plot(lc_aver[0, :], color=colors[0], linestyle='solid', label='newt_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[0, :])), lc_min[0, :], lc_max[0, :], color=colors[0], alpha=alpha)
 
-plt.plot(lc_min[1, :], color='blue', linestyle='dashed', label='newt_min', linewidth=linewidth)
-plt.plot(lc_aver[1, :], color='blue', linestyle='solid', label='newt_aver', linewidth=linewidth)
-plt.plot(lc_max[1, :], color='blue', linestyle='dashed', label='newt_max', linewidth=linewidth)
+plt.plot(lc_aver[1, :], color=colors[1], linestyle='solid', label='cubic_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[1, :])), lc_min[1, :], lc_max[1, :], color=colors[1], alpha=alpha)
 
-plt.plot(lc_min[2, :], color='green', linestyle='dashed', label='cubic_min', linewidth=linewidth)
-plt.plot(lc_aver[2, :], color='green', linestyle='solid', label='cubic_aver', linewidth=linewidth)
-plt.plot(lc_max[2, :], color='green', linestyle='dashed', label='cubic_max', linewidth=linewidth)
+plt.plot(lc_aver[2, :], color=colors[2], linestyle='solid', label='cubic_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[2, :])), lc_min[2, :], lc_max[2, :], color=colors[2], alpha=alpha)
 
-plt.plot(lc_min[3, :], color='purple', linestyle='dashed', label='simp_cubic_min', linewidth=linewidth)
-plt.plot(lc_aver[3, :], color='purple', linestyle='solid', label='simp_cubic_aver', linewidth=linewidth)
-plt.plot(lc_max[3, :], color='purple', linestyle='dashed', label='simp_cubic_max', linewidth=linewidth)
+plt.plot(lc_aver[3, :], color=colors[3], linestyle='solid', label='cubic_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[3, :])), lc_min[3, :], lc_max[3, :], color=colors[3], alpha=alpha)
 
 plt.xlabel('iterations', fontsize=13)
-plt.ylabel('NMSE, dB', fontsize=13)
-# plt.legend(handles=[plt.gca().get_lines()[0], plt.gca().get_lines()[1],
-#                     plt.gca().get_lines()[3], plt.gca().get_lines()[4],
-#                     plt.gca().get_lines()[6], plt.gca().get_lines()[7],
-#                     plt.gca().get_lines()[9], plt.gca().get_lines()[10]], 
-#                     labels=['Mixed Newton, NMSE min-max range', 'Mixed Newton, Average NMSE', 
-#                     'Newton, NMSE min-max range', 'Newton, Average NMSE', 
-#                     'Cubic Newton, NMSE min-max range', 'Cubic Newton, Average NMSE',
-#                     'Simple Cubic Newton, NMSE min-max range', 'Simple Cubic Newton, Average NMSE'], fontsize=13)
-plt.yticks(np.arange(-10, -15, -0.5))
-plt.ylim([-15, -10])
+plt.ylabel('MSE', fontsize=13)
+plt.legend(handles=[plt.gca().get_lines()[0], plt.gca().get_lines()[1],
+                    plt.gca().get_lines()[2], plt.gca().get_lines()[3]],
+          labels=['LM-MNM', 'LM-NM', 'CNM', 'CMNM'], fontsize=13)
+
+# plt.yticks(np.arange(-10, -15, -0.5))
+# plt.ylim([-15, -10])
+plt.xlim(0, 1500)
 plt.grid()
 
 
 # Determine experiment name and create its directory
 seed_0 = 964
-figure = 2
+figure = 20
 epochs = 1500
 exp_num = 5
 linewidth = 1
@@ -111,40 +107,33 @@ for j_method, method in enumerate(methods):
 
 plt.figure(figure)
 
-plt.plot(lc_min[0, :], color='red', linestyle='dashed', label='mnm_min', linewidth=linewidth)
-plt.plot(lc_aver[0, :], color='red', linestyle='solid', label='mnm_aver', linewidth=linewidth)
-plt.plot(lc_max[0, :], color='red', linestyle='dashed', label='mnm_max', linewidth=linewidth)
+plt.plot(lc_aver[0, :], color=colors[0], linestyle='solid', label='newt_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[0, :])), lc_min[0, :], lc_max[0, :], color=colors[0], alpha=alpha)
 
-plt.plot(lc_min[1, :], color='blue', linestyle='dashed', label='newt_min', linewidth=linewidth)
-plt.plot(lc_aver[1, :], color='blue', linestyle='solid', label='newt_aver', linewidth=linewidth)
-plt.plot(lc_max[1, :], color='blue', linestyle='dashed', label='newt_max', linewidth=linewidth)
+plt.plot(lc_aver[1, :], color=colors[1], linestyle='solid', label='cubic_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[1, :])), lc_min[1, :], lc_max[1, :], color=colors[1], alpha=alpha)
 
-plt.plot(lc_min[2, :], color='green', linestyle='dashed', label='cubic_min', linewidth=linewidth)
-plt.plot(lc_aver[2, :], color='green', linestyle='solid', label='cubic_aver', linewidth=linewidth)
-plt.plot(lc_max[2, :], color='green', linestyle='dashed', label='cubic_max', linewidth=linewidth)
+plt.plot(lc_aver[2, :], color=colors[2], linestyle='solid', label='cubic_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[2, :])), lc_min[2, :], lc_max[2, :], color=colors[2], alpha=alpha)
 
-plt.plot(lc_min[3, :], color='purple', linestyle='dashed', label='simp_cubic_min', linewidth=linewidth)
-plt.plot(lc_aver[3, :], color='purple', linestyle='solid', label='simp_cubic_aver', linewidth=linewidth)
-plt.plot(lc_max[3, :], color='purple', linestyle='dashed', label='simp_cubic_max', linewidth=linewidth)
+plt.plot(lc_aver[3, :], color=colors[3], linestyle='solid', label='cubic_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[3, :])), lc_min[3, :], lc_max[3, :], color=colors[3], alpha=alpha)
 
 plt.xlabel('iterations', fontsize=13)
-plt.ylabel('NMSE, dB', fontsize=13)
-# plt.legend(handles=[plt.gca().get_lines()[0], plt.gca().get_lines()[1],
-#                     plt.gca().get_lines()[3], plt.gca().get_lines()[4],
-#                     plt.gca().get_lines()[6], plt.gca().get_lines()[7],
-#                     plt.gca().get_lines()[9], plt.gca().get_lines()[10]], 
-#                     labels=['Mixed Newton, NMSE min-max range', 'Mixed Newton, Average NMSE', 
-#                     'Newton, NMSE min-max range', 'Newton, Average NMSE', 
-#                     'Cubic Newton, NMSE min-max range', 'Cubic Newton, Average NMSE',
-#                     'Simple Cubic Newton, NMSE min-max range', 'Simple Cubic Newton, Average NMSE'], fontsize=13)
-plt.yticks(np.arange(-10, -15, -0.5))
-plt.ylim([-15, -10])
+plt.ylabel('MSE', fontsize=13)
+plt.legend(handles=[plt.gca().get_lines()[0], plt.gca().get_lines()[1],
+                    plt.gca().get_lines()[2], plt.gca().get_lines()[3]],
+          labels=['LM-MNM', 'LM-NM', 'CNM', 'CMNM'], fontsize=13)
+
+# plt.yticks(np.arange(-10, -15, -0.5))
+# plt.ylim([-15, -10])
+plt.xlim(0, 1500)
 plt.grid()
 
 
 # Determine experiment name and create its directory
 seed_0 = 964
-figure = 3
+figure = 30
 epochs = 1500
 exp_num = 5
 linewidth = 1
@@ -177,32 +166,25 @@ for j_method, method in enumerate(methods):
 
 plt.figure(figure)
 
-plt.plot(lc_min[0, :], color='red', linestyle='dashed', label='mnm_min', linewidth=linewidth)
-plt.plot(lc_aver[0, :], color='red', linestyle='solid', label='mnm_aver', linewidth=linewidth)
-plt.plot(lc_max[0, :], color='red', linestyle='dashed', label='mnm_max', linewidth=linewidth)
+plt.plot(lc_aver[0, :], color=colors[0], linestyle='solid', label='newt_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[0, :])), lc_min[0, :], lc_max[0, :], color=colors[0], alpha=alpha)
 
-plt.plot(lc_min[1, :], color='blue', linestyle='dashed', label='newt_min', linewidth=linewidth)
-plt.plot(lc_aver[1, :], color='blue', linestyle='solid', label='newt_aver', linewidth=linewidth)
-plt.plot(lc_max[1, :], color='blue', linestyle='dashed', label='newt_max', linewidth=linewidth)
+plt.plot(lc_aver[1, :], color=colors[1], linestyle='solid', label='cubic_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[1, :])), lc_min[1, :], lc_max[1, :], color=colors[1], alpha=alpha)
 
-plt.plot(lc_min[2, :], color='green', linestyle='dashed', label='cubic_min', linewidth=linewidth)
-plt.plot(lc_aver[2, :], color='green', linestyle='solid', label='cubic_aver', linewidth=linewidth)
-plt.plot(lc_max[2, :], color='green', linestyle='dashed', label='cubic_max', linewidth=linewidth)
+plt.plot(lc_aver[2, :], color=colors[2], linestyle='solid', label='cubic_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[2, :])), lc_min[2, :], lc_max[2, :], color=colors[2], alpha=alpha)
 
-plt.plot(lc_min[3, :], color='purple', linestyle='dashed', label='simp_cubic_min', linewidth=linewidth)
-plt.plot(lc_aver[3, :], color='purple', linestyle='solid', label='simp_cubic_aver', linewidth=linewidth)
-plt.plot(lc_max[3, :], color='purple', linestyle='dashed', label='simp_cubic_max', linewidth=linewidth)
+plt.plot(lc_aver[3, :], color=colors[3], linestyle='solid', label='cubic_aver', linewidth=1)
+plt.fill_between(np.arange(len(lc_min[3, :])), lc_min[3, :], lc_max[3, :], color=colors[3], alpha=alpha)
 
 plt.xlabel('iterations', fontsize=13)
-plt.ylabel('NMSE, dB', fontsize=13)
-# plt.legend(handles=[plt.gca().get_lines()[0], plt.gca().get_lines()[1],
-#                     plt.gca().get_lines()[3], plt.gca().get_lines()[4],
-#                     plt.gca().get_lines()[6], plt.gca().get_lines()[7],
-#                     plt.gca().get_lines()[9], plt.gca().get_lines()[10]], 
-#                     labels=['Mixed Newton, NMSE min-max range', 'Mixed Newton, Average NMSE', 
-#                     'Newton, NMSE min-max range', 'Newton, Average NMSE', 
-#                     'Cubic Newton, NMSE min-max range', 'Cubic Newton, Average NMSE',
-#                     'Simple Cubic Newton, NMSE min-max range', 'Simple Cubic Newton, Average NMSE'], fontsize=13)
-plt.yticks(np.arange(-10, -15, -0.5))
-plt.ylim([-15, -10])
+plt.ylabel('MSE', fontsize=13)
+plt.legend(handles=[plt.gca().get_lines()[0], plt.gca().get_lines()[1],
+                    plt.gca().get_lines()[2], plt.gca().get_lines()[3]],
+          labels=['LM-MNM', 'LM-NM', 'CNM', 'CMNM'], fontsize=13)
+
+# plt.yticks(np.arange(-10, -15, -0.5))
+# plt.ylim([-15, -10])
+plt.xlim(0, 1500)
 plt.grid()
