@@ -2,7 +2,7 @@
 
 - **Positive polynomials minimaiztion.** 
 experiments/positive_polynomial/RMNM_and_ONM_for_positive_polynomial.ipynb contains numerical experiments for the comparison of Ordinary Mixed Newton (ONM) and Regularized Mixed Newton (RMNM) in terms of nonnegative real polynomials minimization.
-- **Telecommunication task simulations**  
+- **Telecommunication task simulations.**  
     1. **_Simulations on CV-CNN model:**
         In folder experiments/CVCNN:
         Run run_CMNM.py to reproduce results achieved by Cubic Mixed-Newton method.
