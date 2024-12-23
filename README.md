@@ -1,10 +1,10 @@
 ## **Steps to reproduce the experiments described in the paper "Mixed Newton Method for Optimization in Complex Spaces"**
 
-- **-Positive polynomials minimaiztion-**
+- **_Positive polynomials minimaiztion_**
 experiments/positive_polynomial/RMNM_and_ONM_for_positive_polynomial.ipynb contains numerical experiments for the comparison of Ordinary Mixed Newton (ONM) and Regularized Mixed Newton (RMNM) in terms of nonnegative real polynomials minimization.
-- **-Telecommunication task simulations-**
+- **_Telecommunication task simulations_**
 
-- **-Abalone task simulations-**
+- **_Abalone task simulations_**
 
 Telecom task:
     1. Simulations on CV-CNN model:
