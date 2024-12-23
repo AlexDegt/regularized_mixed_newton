@@ -1,11 +1,8 @@
-$$
-E=mc^2
-$$
-
 ```math
-(D_{z}^*J)^T=(D_{z}y)^He
-
-'$(D_{z}^*J)^T=(D_{z}y)^He$'
+\begin{itemize}
+    \item \text{experiments/positive_polynomial/RMNM and ONM for positive polynomial.ipynb contains numerical experiments for the comparison of Ordinary Mixed Newton (ONM) and Regularized Mixed Newton (RMNM) in terms of minimization of nonnegative real polynomials.}
+    \item \text{1}
+\end{itemize}
 
 Telecom task:
     1. Simulations on CV-CNN model:
