@@ -1,3 +1,12 @@
+$$
+E=mc^2
+$$
+
+```math
+(D_{z}^*J)^T=(D_{z}y)^He
+
+'$(D_{z}^*J)^T=(D_{z}y)^He$'
+
 Telecom task:
     1. Simulations on CV-CNN model:
         In folder experiments/CVCNN:
