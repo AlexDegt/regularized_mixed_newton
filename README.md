@@ -17,6 +17,7 @@ experiments/positive_polynomial/RMNM_and_ONM_for_positive_polynomial.ipynb conta
         Run plot_results.py to plot corresponding graphs, showed in paper.
 
 - **Abalone task simulations**
+
 Simulations on both real-valued and complex-valued MLP model:
     In folder experiments/MLP:
     Run run_experiments.ipynb to reproduce simulations related to all optimization methods.
