@@ -1,4 +1,4 @@
-## **<h1 style="text-align:center;">Steps to reproduce the experiments described in the paper "Mixed Newton Method for Optimization in Complex Spaces"</h1>**
+## **Steps to reproduce the experiments described in the paper "Mixed Newton Method for Optimization in Complex Spaces"**
 
 - experiments/positive_polynomial/RMNM_and_ONM_for_positive_polynomial.ipynb contains numerical experiments for the comparison of Ordinary Mixed Newton (ONM) and Regularized Mixed Newton (RMNM) in terms of nonnegative real polynomials minimization.
 - 1
