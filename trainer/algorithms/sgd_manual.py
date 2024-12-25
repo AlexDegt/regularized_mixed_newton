@@ -18,7 +18,8 @@ BatchTensorType = Callable[[Tensor], Tuple[Tensor, ...]]
 
 def train_sgd_manual(model: nn.Module, train_dataset: DataLoaderType, validate_dataset: DataLoaderType, test_dataset: DataLoaderType, 
                      loss_fn: LossFnType, quality_criterion: LossFnType, batch_to_tensors: BatchTensorType, save_path: OptionalStr = None, 
-                     exp_name: OptionalStr = None, save_every: OptionalInt = None, save_signals: bool = False, weight_names: StrOrList = None):
+                     exp_name: OptionalStr = None, save_every: OptionalInt = None, save_signals: bool = False, weight_names: StrOrList = None,
+                     epochs: OptionalInt = None):
     """
     Function implements Stochastic Gradient Descent. The main difference from the standart approach loss.backward() is that
     computation of Wirtinger gradient is implemented through the calculation of Jacobian of loss function with respect to
@@ -51,12 +52,14 @@ def train_sgd_manual(model: nn.Module, train_dataset: DataLoaderType, validate_d
         save_signals (bool): The flag that shows, whether to save training signals or not. Defaults to False.
         weight_names (str or list of str, optional): By spceifying `weight_names` it is possible to compute gradient only
             for several named parameters. Defaults to "None".
+        epochs (int, optional): The number of algorithm iterations on full training dataset. Defaults to "None".
 
     Returns:
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(1e+5)
+    if epochs is None:
+        epochs = int(1e+5)
 
     if save_every is None:
         save_every = epochs - 1

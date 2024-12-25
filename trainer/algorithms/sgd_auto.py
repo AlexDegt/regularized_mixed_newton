@@ -18,7 +18,7 @@ BatchTensorType = Callable[[Tensor], Tuple[Tensor, ...]]
 def train_sgd_auto(model: nn.Module, train_dataset: DataLoaderType, validate_dataset: DataLoaderType,
               test_dataset: DataLoaderType, loss_fn: LossFnType, quality_criterion: LossFnType, 
               batch_to_tensors: BatchTensorType, config_train: dict, save_path: OptionalStr = None, exp_name: OptionalStr = None, 
-              save_every: OptionalInt = None):
+              save_every: OptionalInt = None, epochs: OptionalInt = None):
     """
     Function optimizes model parameters using common stochastic gradient descent, loss.backward() method.
 
@@ -44,11 +44,13 @@ def train_sgd_auto(model: nn.Module, train_dataset: DataLoaderType, validate_dat
         exp_name (str, optional): Name of simulation, which is reflected in function product names. Defaults to "None".
         save_every (int, optional): The number which reflects following: the results would be saved every save_every epochs.
             If save_every equals None, then results will be saved at the end of learning. Defaults to "None".
+        epochs (int, optional): The number of algorithm iterations on full training dataset. Defaults to "None".
 
     Returns:
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
-    epochs = int(1e+4)
+    if epochs is None:
+        epochs = int(1e+5)
 
     if save_every is None:
         save_every = epochs - 1
