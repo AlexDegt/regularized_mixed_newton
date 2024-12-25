@@ -5,6 +5,7 @@ import os
 
 import torch
 import random
+import yaml
 import numpy as np
 from oracle import count_parameters
 from trainer import train
@@ -12,21 +13,26 @@ from utils import dataset_prepare
 from scipy.io import loadmat
 from model import RVCNN
 
+# Load config
+with open('config.yaml', 'r') as file:
+    config = yaml.safe_load(file)
+
+# The number of algorithm iterations on full dataset
+epochs = int(1.5e+3)
+
 seed_0 = 964
 for exp in range(0, 5):
     seed = seed_0 + exp
     # Determine experiment name and create its directory
-    exp_name = f"paper_exp_{exp}_seed_{seed}_cubic_newton_4_channels_6_5_5_2_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1"
-    # exp_name = "test"
+    exp_name = f"reproduced_paper_exp_{exp}_seed_{seed}_cubic_newton_4_channels_6_5_5_2_ker_size_3_3_3_3_act_sigmoid_1500_epochs"
 
-    add_folder = os.path.join("")
+    add_folder = os.path.join("results_reproduced")
     curr_path = os.getcwd()
     save_path = os.path.join(curr_path, add_folder, exp_name)
-    os.mkdir(save_path)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path, exist_ok=True)
 
-    device = "cuda:0"
-    # device = "cpu"
-    # seed = 964
+    device = config["device"]
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
@@ -45,19 +51,13 @@ for exp in range(0, 5):
     ptype = torch.float64
 
     # Number of output channels of each convolutional layer.
-    # out_channels = [1, 1]
-    # out_channels = [3, 3, 3, 2]
     out_channels = [6, 5, 5, 2]
     # Kernel size for each layer. Kernel sizes must be odd integer numbers.
     # Otherwise input sequence length will be reduced by 1 (for case of mode == 'same' in nn.Conv1d).
-    # kernel_size = [3, 3]
     kernel_size = [3, 3, 3, 3]
-    # kernel_size = [5, 5, 5, 5]
     # Activation functions are listed in /model/layers/activation.py
     # Don`t forget that model output must be holomorphic w.r.t. model parameters
-    # activate = ['sigmoid', 'sigmoid']
     activate = ['sigmoid', 'sigmoid', 'sigmoid', 'sigmoid']
-    # activate = ['ctanh', 'ctanh', 'ctanh', 'ctanh']
     p_drop = list(np.zeros_like(out_channels))
     delays = [[0]]
     slot_num = 10
@@ -72,9 +72,11 @@ for exp in range(0, 5):
     # block_size == None is equal to block_size = signal length.
     # Block size is the same as chunk size 
     batch_size = 1
-    chunk_num = 1
-    # chunk_size = int(213504/chunk_num)
-    chunk_size = int(0.8 * 213500/chunk_num)
+    chunk_num = config["chunk_num"]
+    signal_length = 0.8 * 213500
+    assert signal_length % chunk_num == 0, \
+        f"It is recommended to set number of chunks such that whole signal length {signal_length} is divisible evenly by number of chunks {chunk_num} for correct hessian and gradient accumulation."
+    chunk_size = int(signal_length/chunk_num)
     # L2 regularization parameter
     alpha = 0.0
     # Configuration file
@@ -151,11 +153,13 @@ for exp in range(0, 5):
 
     weight_names = list(name for name, _ in model.state_dict().items())
 
-    print(f"Current model parameters number is {count_parameters(model)}")
+    parameters_num = count_parameters(model)
+    print(f"Current model parameters number is {parameters_num}")
     param_names = [name for name, p in model.named_parameters()]
     params = [(name, p.size(), p.dtype) for name, p in model.named_parameters()]
     # print(params)
-    # sys.exit()
+    assert parameters_num < chunk_size, \
+        f"The number of trainable model parameters {parameters_num} must be lower signal chunk size {chunk_size} for correct work of Newton-based methods."
 
     def param_init(model):
         branch_num = len(delays)
@@ -192,6 +196,6 @@ for exp in range(0, 5):
     # train_type='cubic_newton_simple' # Simplified cubic Newton. Currently work only with models with complex parameters!
     learning_curve, best_criterion = train(model, train_dataset, loss, quality_criterion, config_train, batch_to_tensors, validate_dataset, test_dataset, 
                                         train_type=train_type, chunk_num=chunk_num, exp_name=exp_name, save_every=1, save_path=save_path, 
-                                        weight_names=weight_names, device=device, jac_calc_strat=jac_calc_strat)
+                                        weight_names=weight_names, device=device, jac_calc_strat=jac_calc_strat, epochs=epochs)
 
     print(f"Best NMSE: {best_criterion} dB")
