@@ -6,7 +6,7 @@ experiments/positive_polynomial/RMNM_and_ONM_for_positive_polynomial.ipynb conta
 
     1. **_Remarks related to both CV-CNN and RV-CNN models_:**
         - Folder experiments/CVCNN and experiments/RVCNN contains config.yaml file which includes 2 parameters provided to the user for adjustment: device and chunk_num.
-        - chunk_num parameter relates to the number of chunks to divide whole signal into and accumuate hessian and gradient. It is recommended to set number of chunks such that whole signal length is divisible evenly by number of chunks for correct hessian and gradient accumulation. Whole signal length equals 170800 complex samples.
+        - chunk_num parameter relates to the number of chunks to divide whole signal into and accumuate hessian and gradient. Current parameter is entered in order to regulate occupied GPU memory for hessian calculation. It is recommended to set number of chunks such that whole signal length is divisible evenly by number of chunks for correct hessian and gradient accumulation. Whole signal length equals 170800 complex samples.
 
     1. **_Simulations on CV-CNN model:**
         In folder experiments/CVCNN:
