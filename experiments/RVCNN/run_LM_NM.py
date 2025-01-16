@@ -26,7 +26,7 @@ for exp in range(0, 5):
     # Determine experiment name and create its directory
     exp_name = f"reproduced_paper_exp_{exp}_seed_{seed}_cubic_newton_4_channels_6_5_5_2_ker_size_3_3_3_3_act_sigmoid_1500_epochs"
 
-    add_folder = os.path.join("results_reproduced")
+    add_folder = os.path.join("reproduced_results")
     curr_path = os.getcwd()
     save_path = os.path.join(curr_path, add_folder, exp_name)
     if not os.path.exists(save_path):
