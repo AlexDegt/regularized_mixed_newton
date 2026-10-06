@@ -6,3 +6,7 @@ from .newton_damped import train_newton_damped
 from .newton_levenb_marq import train_newton_levenb_marq
 from .cubic_newton import train_cubic_newton
 from .cubic_newton_simplified import train_cubic_newton_simplified
+from .cubic_newton_fair import train_cubic_newton_fair
+
+from .newton import train_newton
+from .newton_truncated import train_newton_truncated

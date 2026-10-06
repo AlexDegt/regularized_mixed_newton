@@ -396,6 +396,7 @@ class Oracle(object):
     @torch.enable_grad()
     def hessian(self, signal_batch: BatchType, weight_names: StrOrList = None, compute_fn_val: bool = False,
                 outer_jacobian_strategy: str = "reverse-mode", return_full_wirtinger_derivative: bool = False,
+                return_full_real_derivative_for_truncated_cubic_newton = False, 
                 idxs: OptionalTensor = None, return_for_cubic_newton = True, vectorize: bool = False,
                 return_full_real_derivative: bool = False) -> DerRetType:
         """
@@ -471,7 +472,8 @@ class Oracle(object):
                                            for row, h_row in enumerate(H_res[num_real_params:])), dim=0)
             if return_full_real_derivative:
                 if idxs is None:
-                    H = torch.cat((torch.cat((H_res_xx, H_res_xy), dim=1), torch.cat((H_res_yx, H_res_yy), dim=1)),
+                    H = torch.cat((torch.cat((H_res_xx, H_res_xy), dim=1), 
+                                   torch.cat((H_res_yx, H_res_yy), dim=1)),
                                   dim=0)
                 else:
                     H = torch.cat((torch.cat((H_res_xx[idxs[:, None], idxs], H_res_xy[idxs[:, None], idxs]), dim=1),
@@ -494,6 +496,17 @@ class Oracle(object):
                     H = (H_res_xx + H_res_yy + 1.j * (H_res_yx - H_res_xy)) / 4.
                 else:
                     H = ((H_res_xx + H_res_yy + 1.j * (H_res_yx - H_res_xy)) / 4.)[idxs[:, None], idxs]
+            
+            if return_full_real_derivative_for_truncated_cubic_newton:
+                if idxs is None:
+                    H = torch.cat((torch.cat((H_res_xx, (1/2) * (H_res_xy - H_res_yx)), dim=1), 
+                                   torch.cat(((1/2) * (H_res_yx - H_res_xy), H_res_xx), dim=1)),
+                                  dim=0)
+                else:
+                    H = torch.cat((torch.cat((H_res_xx[idxs[:, None], idxs], (1/2) * (H_res_xy - H_res_yx)[idxs[:, None], idxs]), dim=1),
+                                   torch.cat(((1/2) * (H_res_yx - H_res_xy)[idxs[:, None], idxs], H_res_xx[idxs[:, None], idxs]), dim=1)),
+                                  dim=0)
+
         else:
             def f(*weights):
                 load_weights(self._model, names, weights)

@@ -30,21 +30,36 @@ def update_delta(error, delta_min, delta_max, delta):
             delta = (delta_min + delta_max) / 2
     return delta_max, delta_min, delta
 
-def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvectors_gradient_product, tol=1e-9):
+def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant,
+               eigenvectors_gradient_product, shift_coef, tol=1e-9, max_iter=500):
     def get_direction_delta(delta):
-        diag_values = eigenvalues_hess + lipschitz_constant * delta / 4
+        diag_values = eigenvalues_hess + lipschitz_constant * delta / shift_coef
         return -eigenvectors_hess @ (1 / diag_values * eigenvectors_gradient_product)
-    tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0)
-    if isinstance(tmp, torch.Tensor):
-        tmp = tmp.cpu().item()
-    delta_max, delta_min, delta = np.inf, tmp, 100
-    while True:
+ 
+    tmp = shift_coef * max(-eigenvalues_hess.min().item() / lipschitz_constant, 0.)
+    delta_max, delta_min, delta = np.inf, tmp, max(2 * tmp, 1.)
+    for _ in range(max_iter):
         direction = get_direction_delta(delta)
-        error = delta ** 2 - torch.norm(direction) ** 2
-        if abs(error) <= tol or delta_max-delta_min < tol/1e4:
-            return delta, direction
+        error = delta - torch.norm(direction).item()
+        if abs(error) <= tol * delta or delta_max - delta_min <= tol * delta:
+            break
         delta_max, delta_min, delta = update_delta(error, delta_min, delta_max, delta)
+    return delta, direction
 
+# def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvectors_gradient_product, tol=1e-9):
+#     def get_direction_delta(delta):
+#         diag_values = eigenvalues_hess + lipschitz_constant * delta / 4
+#         return -eigenvectors_hess @ (1 / diag_values * eigenvectors_gradient_product)
+#     tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0)
+#     if isinstance(tmp, torch.Tensor):
+#         tmp = tmp.cpu().item()
+#     delta_max, delta_min, delta = np.inf, tmp, 100
+#     while True:
+#         direction = get_direction_delta(delta)
+#         error = delta ** 2 - torch.norm(direction) ** 2
+#         if abs(error) <= tol or delta_max-delta_min < tol/1e4:
+#             return delta, direction
+#         delta_max, delta_min, delta = update_delta(error, delta_min, delta_max, delta)
 
 def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate_dataset: DataLoaderType,
                               test_dataset: DataLoaderType, loss_fn: LossFnType, quality_criterion: LossFnType, 
@@ -104,7 +119,8 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    epochs = int(300)
+    # epochs = int(1.5e+3)
+    epochs = 100
 
     if save_every is None:
         save_every = epochs - 1
@@ -181,43 +197,52 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
                     grad = torch.zeros_like(delta_grad)
                 hess += delta_hess
                 grad += delta_grad
-                del delta_hess, delta_grad
-                torch.cuda.empty_cache()
+            del delta_hess, delta_grad
 
-        # Calculate and apply cubic Newton step
-        eigenvalues_hess, eigenvectors_hess = torch.linalg.eigh(hess)
-        hess_cond = torch.linalg.cond(hess).item()
-        x = SICOracle.get_flat_params(name_list=weight_names)
-        lipschitz_constant = 1.e-2
-        eigenvectors_gradient_product = eigenvectors_hess.T.conj() @ grad
-        while True:
-            delta, direction = find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant,
-                                           eigenvectors_gradient_product)
-            curr_params = x + mu * direction
-            SICOracle.set_flat_params(curr_params, name_list=weight_names)
-            # Calculate loss value on whole signal length
-            with torch.no_grad():
+        with torch.no_grad():
+            is_real = not torch.is_complex(hess)
+            shift_coef = 2 if is_real else 4
+
+            eigenvalues_hess, eigenvectors_hess = torch.linalg.eigh(hess)
+            del hess
+            abs_eig = eigenvalues_hess.abs()
+            hess_cond = (abs_eig.max() / abs_eig.min()).item()
+            lambda_min = eigenvalues_hess.min().item()
+
+            eigenvectors_gradient_product = eigenvectors_hess.T.conj() @ grad
+            grad_norm = torch.norm(grad).item()
+            del grad
+
+            x = SICOracle.get_flat_params(name_list=weight_names)
+            lipschitz_constant = 1.e-2
+
+            while True:
+                delta, direction = find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant,
+                                                eigenvectors_gradient_product, shift_coef)
+
+                coef = -eigenvectors_gradient_product / (eigenvalues_hess + lipschitz_constant * delta / shift_coef)
+                lin_part = 2 * (coef.conj() * eigenvectors_gradient_product).sum()
+                quad_part = (eigenvalues_hess * coef.abs() ** 2).sum()
+                if is_real:
+                    lin_part /= 2
+
+                cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 3 / 6
+
+                curr_params = x + direction
+                SICOracle.set_flat_params(curr_params, name_list=weight_names)
+
                 tmp_loss_val = accum_loss(train_dataset)
-            lin_part = 2 * (grad * direction.conj()).sum()
-            quad_part = ((hess @ direction) * direction.conj()).sum()
-            # Check whether model parameters are complex or not
-            if not torch.is_complex(direction):
-                lin_part /= 2
-            cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 3 / 6
-            if tmp_loss_val.real > cube_estimation.real or tmp_loss_val.real > loss_val_train.real:
-                lipschitz_constant *= 1.5
-            else:
-                break
+
+                if not np.isfinite(tmp_loss_val) or tmp_loss_val.real > cube_estimation.real or tmp_loss_val.real > loss_val_train.real:
+                    lipschitz_constant *= 1.5
+                else:
+                    break
         
         # Track algorithm parameters
         reg_param_curve.append(lipschitz_constant * delta / 4)
         loss_val_train = tmp_loss_val
-        grad_norm = torch.norm(grad).item()
         grad_norm_curve.append(grad_norm)
         weights_norm_curve.append(torch.norm(curr_params).item())
-
-        del grad, hess
-        torch.cuda.empty_cache()
 
         # Track NMSE values on validation and test dataset and save gradient, model parameters norm and 
         # algorithm regularization history
