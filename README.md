@@ -1,11 +1,12 @@
 ## **Steps to reproduce the experiments described in the paper "Mixed Newton Method for Optimization in Complex Spaces"**
 
-- **Positive polynomials minimaiztion.** 
-experiments/positive_polynomial/OrdinaryNewton_RMNM_gamma_sweep on real subspace Ex 4.1.ipynb
-experiments/positive_polynomial/OrdinaryNewton_RMNM_gamma_sweep on real subspace Ex 4.2.ipynb
-experiments/positive_polynomial/OrdinaryNewton_RMNM_gamma_sweep on real subspace Ex 4.3.ipynb
-experiments/positive_polynomial/OrdinaryNewton_RMNM_gamma_sweep-on complex subspace Ex 4.3.ipynb
-contains numerical experiments for the comparison of Ordinary Mixed Newton (ONM) and Regularized Mixed Newton (RMNM) in terms of nonnegative real polynomials minimization.
+- **Positive polynomials minimization.** The notebooks
+  - `experiments/positive_polynomial/OrdinaryNewton_RMNM_gamma_sweep on real subspace Ex 4.1.ipynb`
+  - `experiments/positive_polynomial/OrdinaryNewton_RMNM_gamma_sweep on real subspace Ex 4.2.ipynb`
+  - `experiments/positive_polynomial/OrdinaryNewton_RMNM_gamma_sweep on real subspace Ex 4.3.ipynb`
+  - `experiments/positive_polynomial/OrdinaryNewton_RMNM_gamma_sweep-on complex subspace Ex 4.3.ipynb`
+
+  contain numerical experiments for the comparison of the Ordinary Newton Method (ONM) and the Regularized Mixed Newton Method (RMNM) in terms of the minimization of nonnegative real polynomials.
 - **Telecommunication task simulations.** 
 
     1. **_Remarks related to both CV-CNN and RV-CNN models_:**
