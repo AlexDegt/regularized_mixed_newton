@@ -17,12 +17,11 @@ for exp in range(0, 5):
     seed = seed_0 + exp
     # Determine experiment name and create its directory
     exp_name = f"paper_exp_{exp}_seed_{seed}_cubic_newton_4_channels_6_5_5_2_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1"
-    # exp_name = "test"
 
-    add_folder = os.path.join("")
+    add_folder = os.path.join("reproduced_results")
     curr_path = os.getcwd()
     save_path = os.path.join(curr_path, add_folder, exp_name)
-    os.mkdir(save_path)
+    os.makedirs(save_path, exist_ok=True)
 
     device = "cuda:0"
     # device = "cpu"

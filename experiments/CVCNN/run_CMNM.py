@@ -20,10 +20,10 @@ for start_name in start:
         # Determine experiment name and create its directory
         exp_name = f"paper_exp_{exp}_seed_{seed}_" + start_name + "_start_cubic_newton_4_channels_3_3_3_1_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1"
 
-        add_folder = os.path.join("")
+        add_folder = os.path.join("reproduced_results")
         curr_path = os.getcwd()
         save_path = os.path.join(curr_path, add_folder, exp_name)
-        os.mkdir(save_path)
+        os.makedirs(save_path, exist_ok=True)
 
         device = "cuda:0"
         # device = "cpu"
