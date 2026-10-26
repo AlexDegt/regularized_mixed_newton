@@ -22,8 +22,7 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
                               test_dataset: DataLoaderType, loss_fn: LossFnType, quality_criterion: LossFnType, 
                               batch_to_tensors: BatchTensorType, chunk_num: OptionalInt = None, 
                               save_path: OptionalStr = None, exp_name: OptionalStr = None, save_every: OptionalInt = None, 
-                              save_signals: bool = False, weight_names: StrOrList = None, jac_calc_strat: str = "reverse-mode",
-                              epochs: OptionalInt = None):
+                              save_signals: bool = False, weight_names: StrOrList = None, jac_calc_strat: str = "reverse-mode"):
     """
     Function implements damped version of Mixed Newton Method. Mixed Newton implies computation of the mixed Hessian and
     gradient multiplication each algorithm step. Current function uses oracle.Oracle.direction_through_jacobian
@@ -72,14 +71,12 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
         save_signals (bool): The flag that shows, whether to save training signals or not. Defaults to False.
         weight_names (str or list of str, optional): By spceifying `weight_names` it is possible to compute gradient only
             for several named parameters. Defaults to "None".
-        epochs (int, optional): The number of algorithm iterations on full training dataset. Defaults to "None".
 
     Returns:
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    if epochs is None:
-        epochs = int(1.5e+3)
+    epochs = int(1.5e+3)
 
     if save_every is None:
         save_every = epochs - 1
@@ -248,7 +245,7 @@ def train_newton_damped(model: nn.Module, train_dataset: DataLoaderType, validat
                 f"Hessian conditioning: {hess_cond:.4e}")
         epoch += 1
 
-        general_timer.__exit__()
-        print(f"Total time elapsed: {general_timer.interval} s")
+    general_timer.__exit__()
+    print(f"Total time elapsed: {general_timer.interval} s")
 
     return learning_curve_test, best_criterion_test

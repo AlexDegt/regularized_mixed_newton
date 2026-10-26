@@ -4,5 +4,8 @@ from .sgd_auto import train_sgd_auto
 from .sgd_manual import train_sgd_manual
 from .newton_damped import train_newton_damped
 from .newton_levenb_marq import train_newton_levenb_marq
-from .cubic_newton import train_cubic_newton
+from .hermitian_cubic_newton import train_hermitian_cubic_newton
 from .cubic_newton_simplified import train_cubic_newton_simplified
+from .cubic_newton import train_cubic_newton
+
+from .newton import train_newton
