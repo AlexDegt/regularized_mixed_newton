@@ -25,7 +25,7 @@ for start_name in start:
         save_path = os.path.join(curr_path, add_folder, exp_name)
         os.mkdir(save_path)
 
-        device = "cuda:0"
+        device = "cuda:2"
         # device = "cpu"
         # seed = 964
         torch.manual_seed(seed)
@@ -71,7 +71,7 @@ for start_name in start:
         # block_size == None is equal to block_size = signal length.
         # Block size is the same as chunk size 
         batch_size = 1
-        chunk_num = 1
+        chunk_num = 8
         # chunk_size = int(213504/chunk_num)
         chunk_size = int(0.8 * 213500/chunk_num)
         # L2 regularization parameter
@@ -181,6 +181,9 @@ for start_name in start:
             return None
 
         param_init(model)
+        # Load weights
+        # model.load_state_dict(torch.load('/home/alex-degt/NeurIPS_2024/mnm_paper/experiments/CVCNN/paper_exp_1_seed_965_complex_start_cubic_newton_fair_4_channels_3_3_3_1_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1/weights_best_test_paper_exp_1_seed_965_complex_start_cubic_newton_fair_4_channels_3_3_3_1_ker_size_3_3_3_3_act_sigmoid_1500_epochs_chunks_1'))
+
 
         # Define jacobian calculation mode. Can influence calculations speed significantly depending on the model structure.
         # Could be 'forward-mode' or 'reverse-mode'
@@ -192,8 +195,9 @@ for start_name in start:
         # train_type='mnm_lev_marq' # Levenberg-Marquardt on base of Mixed Newton. Work only with models with complex parameters!
         # train_type='newton_damped' # Damped Newton. Can be used for models with real and complex parameters.
         # train_type='newton_lev_marq' # Levenberg-Marquardt on base of Newton. Can be used for models with real and complex parameters.
-        train_type='cubic_newton' # Cubic Newton. Currently work only with models with complex parameters!
+        train_type='cubic_newton' # Newton method with cubic Nesterov-Polyak regularization.
         # train_type='cubic_newton_simple' # Simplified cubic Newton. Currently work only with models with complex parameters!
+        # train_type='hermitian_cubic_newton' # Simplified version of cubic Newton, which uses hermitian second-order term in Taylor expansion of the objective.
         learning_curve, best_criterion = train(model, train_dataset, loss, quality_criterion, config_train, batch_to_tensors, validate_dataset, test_dataset, 
                                             train_type=train_type, chunk_num=chunk_num, exp_name=exp_name, save_every=1, save_path=save_path, 
                                             weight_names=weight_names, device=device, jac_calc_strat=jac_calc_strat)

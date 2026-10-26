@@ -239,7 +239,7 @@ def train_newton_levenb_marq(model: nn.Module, train_dataset: DataLoaderType, va
                 f"Hessian conditioning: {hess_cond:.4e}, alpha = {alpha:.4e}")
         epoch += 1
 
-        general_timer.__exit__()
-        print(f"Total time elapsed: {general_timer.interval} s")
+    general_timer.__exit__()
+    print(f"Total time elapsed: {general_timer.interval} s")
 
     return learning_curve_test, best_criterion_test

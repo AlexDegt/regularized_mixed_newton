@@ -128,7 +128,7 @@ def train_sgd_manual(model: nn.Module, train_dataset: DataLoaderType, validate_d
                   f"quality_criterion_validat = {criterion_val_validat:.8f}, stepsize = {lrs[-1]:.6e}, " + \
                   f"|grad| = {grad_norm:.4e}, time elapsed: {timer.interval:.2e}")
 
-        general_timer.__exit__()
-        print(f"Total time elapsed: {general_timer.interval} s")
+    general_timer.__exit__()
+    print(f"Total time elapsed: {general_timer.interval} s")
 
     return learning_curve_test, best_criterion

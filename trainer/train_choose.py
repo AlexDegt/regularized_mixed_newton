@@ -3,8 +3,8 @@ from torch import nn, Tensor
 from typing import List, Tuple, Union, Callable, Iterable
 from .algorithms import train_mixed_newton_damped, train_mixed_newton_levenb_marq, \
                         train_sgd_auto, train_sgd_manual, train_newton_damped, \
-                        train_newton_levenb_marq, train_cubic_newton, train_cubic_newton_simplified, \
-                        train_newton, train_newton_truncated, train_cubic_newton_fair
+                        train_newton_levenb_marq, train_hermitian_cubic_newton, train_cubic_newton_simplified, \
+                        train_newton, train_cubic_newton
 
 OptionalInt = Union[int, None]
 OptionalStr = Union[str, None]
@@ -106,25 +106,20 @@ def train(model: nn.Module, train_dataset: DataLoaderType, loss_fn: LossFnType, 
         learning_curve, best_criterion = train_newton_levenb_marq(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                         quality_criterion, batch_to_tensors, chunk_num, 
                                                                         save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
-    elif train_type == 'cubic_newton':
-        learning_curve, best_criterion = train_cubic_newton(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
+    elif train_type == 'hermitian_cubic_newton':
+        learning_curve, best_criterion = train_hermitian_cubic_newton(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                    quality_criterion, batch_to_tensors, chunk_num, 
                                                                    save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
     elif train_type == 'cubic_newton_simple':
         learning_curve, best_criterion = train_cubic_newton_simplified(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                         quality_criterion, batch_to_tensors, chunk_num, 
                                                                         save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
-    
     elif train_type == 'newton':
         learning_curve, best_criterion = train_newton(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                    quality_criterion, batch_to_tensors, chunk_num, 
                                                                    save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
-    elif train_type == 'newton_truncated':
-        learning_curve, best_criterion = train_newton_truncated(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
-                                                                   quality_criterion, batch_to_tensors, chunk_num, 
-                                                                   save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
-    elif train_type == 'cubic_newton_fair':
-        learning_curve, best_criterion = train_cubic_newton_fair(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
+    elif train_type == 'cubic_newton':
+        learning_curve, best_criterion = train_cubic_newton(model, train_dataset, validate_dataset, test_dataset, loss_fn, 
                                                                    quality_criterion, batch_to_tensors, chunk_num, 
                                                                    save_path, exp_name, save_every, save_signals, weight_names, jac_calc_strat)
     else:

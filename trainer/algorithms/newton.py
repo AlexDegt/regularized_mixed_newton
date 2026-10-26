@@ -161,36 +161,6 @@ def train_newton(model: nn.Module, train_dataset: DataLoaderType, validate_datas
             loss_val_train = accum_loss(train_dataset)
             criterion_val_train = quality_criterion(model, train_dataset)
 
-        # # Calculate and apply Levenberg-Marquardt algorithm step with mixed hessia
-        # flag = True
-        # while flag:
-        #     hess_inv = torch.linalg.pinv(hess + alpha*maxH*regul, rcond=1e-40, hermitian=True)
-        #     direction = -1. * hess_inv @ grad      
-        #     x = SICOracle.get_flat_params(name_list=weight_names)
-        #     # Check whether model parameters are complex or not. If direction vector
-        #     # 2 times longer, then model parameters are complex
-        #     param_num = x.numel()
-        #     if direction.numel() == 2 * param_num:
-        #         direction = direction[:param_num] + 1j * direction[param_num:]
-
-        #     curr_params = x + mu * direction
-        #     SICOracle.set_flat_params(curr_params, name_list=weight_names)
-        #     with torch.no_grad():
-        #         tmp_loss_val = accum_loss(train_dataset)
-        #         tmp_criterion_val = quality_criterion(model, train_dataset)
-        #     if tmp_loss_val <= loss_val_train + eps:
-        #         flag = False
-        #         if alpha >= 1e-40:
-        #             alpha /= 3
-        #     else:
-        #         SICOracle.set_flat_params(x, name_list=weight_names)
-        #         alpha *= 1.1
-        #         # if epoch % print_every == 0:
-        #         #     print(f"Deverges, epoch is {epoch + 1}, quality_criterion_train = {tmp_criterion_val:.4f}," + \
-        #         #           f"loss_val = {tmp_loss_val:.4f}, stepsize = {mu:.6e}, reg_param = {alpha:.4e}")
-        # loss_val_train = tmp_loss_val
-        # criterion_val_train = tmp_criterion_val
-
         # Track algorithm parameters
         lrs.append(mu)
         grad_norm = torch.norm(grad).item()
@@ -240,7 +210,7 @@ def train_newton(model: nn.Module, train_dataset: DataLoaderType, validate_datas
                 f"Hessian conditioning: {hess_cond:.4e}")
         epoch += 1
 
-        general_timer.__exit__()
-        print(f"Total time elapsed: {general_timer.interval} s")
+    general_timer.__exit__()
+    print(f"Total time elapsed: {general_timer.interval} s")
 
     return learning_curve_test, best_criterion_test

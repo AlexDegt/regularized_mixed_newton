@@ -2,7 +2,7 @@ import torch
 from torch import nn, Tensor
 from typing import Tuple, Union, Callable, List
 import numpy as np
-from copy import copy, deepcopy
+import time
 
 import sys
 sys.path.append('../../')
@@ -16,7 +16,6 @@ StrOrList = Union[str, List[str], Tuple[str], None]
 DataLoaderType = torch.utils.data.dataloader.DataLoader
 LossFnType = Union[Callable[[nn.Module, Tensor], Tensor], Callable[[nn.Module, Tuple[Tensor, ...]], Tensor]]
 BatchTensorType = Callable[[Tensor], Tuple[Tensor, ...]]
-
 
 def update_delta(error, delta_min, delta_max, delta):
     if error > 0:
@@ -35,7 +34,7 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant,
     def get_direction_delta(delta):
         diag_values = eigenvalues_hess + lipschitz_constant * delta / shift_coef
         return -eigenvectors_hess @ (1 / diag_values * eigenvectors_gradient_product)
- 
+
     tmp = shift_coef * max(-eigenvalues_hess.min().item() / lipschitz_constant, 0.)
     delta_max, delta_min, delta = np.inf, tmp, max(2 * tmp, 1.)
     for _ in range(max_iter):
@@ -46,54 +45,23 @@ def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant,
         delta_max, delta_min, delta = update_delta(error, delta_min, delta_max, delta)
     return delta, direction
 
-# def find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant, eigenvectors_gradient_product, tol=1e-9):
-#     def get_direction_delta(delta):
-#         diag_values = eigenvalues_hess + lipschitz_constant * delta / 4
-#         return -eigenvectors_hess @ (1 / diag_values * eigenvectors_gradient_product)
-#     tmp = 4 * max(-eigenvalues_hess.min() / lipschitz_constant, 0)
-#     if isinstance(tmp, torch.Tensor):
-#         tmp = tmp.cpu().item()
-#     delta_max, delta_min, delta = np.inf, tmp, 100
-#     while True:
-#         direction = get_direction_delta(delta)
-#         error = delta ** 2 - torch.norm(direction) ** 2
-#         if abs(error) <= tol or delta_max-delta_min < tol/1e4:
-#             return delta, direction
-#         delta_max, delta_min, delta = update_delta(error, delta_min, delta_max, delta)
-
 def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate_dataset: DataLoaderType,
-                              test_dataset: DataLoaderType, loss_fn: LossFnType, quality_criterion: LossFnType, 
-                              batch_to_tensors: BatchTensorType, chunk_num: OptionalInt = None, 
-                              save_path: OptionalStr = None, exp_name: OptionalStr = None, save_every: OptionalInt = None, 
-                              save_signals: bool = False, weight_names: StrOrList = None, jac_calc_strat: str = "reverse-mode"):
+                       test_dataset: DataLoaderType, loss_fn: LossFnType, quality_criterion: LossFnType,
+                       batch_to_tensors: BatchTensorType, chunk_num: OptionalInt = None,
+                       save_path: OptionalStr = None, exp_name: OptionalStr = None, save_every: OptionalInt = None,
+                       save_signals: bool = False, weight_names: StrOrList = None, jac_calc_strat: str = "reverse-mode"):
     """
-    Function implements damped version of Mixed Newton Method. Mixed Newton implies computation of the mixed Hessian and
-    gradient multiplication each algorithm step. Current function uses oracle.Oracle.direction_through_jacobian
-    function which firstly accumulates model output jacobian J w.r.t. the model parameters on the whole batch, then 
-    calculates Hessian as matrix multiplication (J^H @ J). Gradient is calculated as vector-jacobian multiplication
-    (J^H @ e), where e - model error on current batch. 
-    
-    Attention!
-    Mixed Newton performs better on the long batches - with big sample size. Batch size could be chosen as 1.
-    For the big sample size (>~ 50000) jacobian matrix requires huge memory resources, that`s why function
-    oracle.Oracle.direction_through_jacobian contains chunk-mechanism under the hood. Chunk-mechanism divides
-    whole batch into the chunks with chunk_size to save GPU memory.
-
-    Damping of the Mixed Newton is also a key mechanism for the appropriate performance acquirement. It is implemented
-    in the following way: firstly inverse Hessian - gradient product is calculated and stored, then model parameters
-    updated with current step size. If the quality criterion improved, then step size is increased. If the quality 
-    criterion degraded comparing to the previous step, then step size is decreased till the quality criterion 
-    is not better comparing to the previous step.
-
-    The stop criteria is determined by gradient norm. If it is lower than min_grad_norm than algorithm stops.
+    Function implements Cubic Newton Method. Each algorithm step the full real Hessian and gradient are accumulated
+    on the whole training dataset, then the Lipschitz constant of the Hessian is selected by the line search:
+    the step is accepted if the loss function does not exceed its cubic upper bound and does not increase.
 
     Args:
         model (nn.Module): The model with differentiable parameters.
         train_dataset (torch DataLoader type): Batched dataset, prepared by the torch.utils.data.dataloader.DataLoader function.
         validate_dataset (torch DataLoader type, optional): Batched dataset, prepared by the torch.utils.data.dataloader.DataLoader function.
-            Current dataset is used to calculate intermediate quality criterion values. 
+            Current dataset is used to calculate intermediate quality criterion values.
             Attention! Validate dataset must have only 1 batch containing whole signal.
-            Newton-based training methods usually work on the whole signal dataset. 
+            Newton-based training methods usually work on the whole signal dataset.
             Therefore train and validation datasets are implied to be the same.
         test_dataset (DataLoader, optional): Batched dataset, prepared by the torch.utils.data.dataloader.DataLoader function.
             Current dataset is used to calculate quality criterion for test data.
@@ -119,8 +87,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
     # Algorithm stop criteria parameters
-    # epochs = int(1.5e+3)
-    epochs = 100
+    epochs = int(1.5e+3)
 
     if save_every is None:
         save_every = epochs - 1
@@ -131,13 +98,12 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
     elif jac_calc_strat == 'reverse-mode':
         vectorize = False
     else:
-        sys.exit(f'Jacobian calculation strategu must be \'forward-mode\' or \'reverse-mode\', but {jac_calc_strat} is given.')
+        sys.exit(f'Jacobian calculation strategy must be \'forward-mode\' or \'reverse-mode\', but {jac_calc_strat} is given.')
 
     epoch, print_every = 0, 1
 
     SICOracle = Oracle(model, loss_fn)
 
-    mu = 1.
     reg_param_curve = []
     learning_curve_train = []
     learning_curve_test = []
@@ -147,6 +113,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
     learning_curve_validate_qcrit = []
     grad_norm_curve = []
     weights_norm_curve = []
+    compute_time_curve = []
     grad_norm = None
     timer = Timer()
     general_timer = Timer()
@@ -157,7 +124,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         for batch in dataset:
             loss_val += SICOracle.loss_function_val(batch).item()
         return loss_val
-            
+
     # Calculate initial values of loss and quality criterion on validation and test dataset
     with torch.no_grad():
         loss_val_test = accum_loss(test_dataset)
@@ -168,7 +135,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         print("Begin: loss = {:.4e}, quality_criterion_test = {:.8f}.".format(loss_val_test, criterion_val_test))
         loss_val_train = accum_loss(train_dataset)
         criterion_val_train = quality_criterion(model, train_dataset)
-        learning_curve_train.append(loss_val_train)   
+        learning_curve_train.append(loss_val_train)
         learning_curve_train_qcrit.append(criterion_val_train)
         print("Begin: loss = {:.4e}, quality_criterion_train = {:.8f}.".format(loss_val_train, criterion_val_train))
         loss_val_validate = accum_loss(validate_dataset)
@@ -176,19 +143,20 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
         learning_curve_validate.append(loss_val_validate)
         learning_curve_validate_qcrit.append(criterion_val_validate)
         print("Begin: loss = {:.4e}, quality_criterion_validate = {:.8f}.".format(loss_val_validate, criterion_val_validate))
-    
+
     epoch = 0
-    min_grad_norm = 1e-8 
+    min_grad_norm = 1e-8
     for epoch in range(epochs):
     # while grad_norm is None or grad_norm >= min_grad_norm:
         timer.__enter__()
+        compute_start = time.perf_counter()
         # Accumulate hessian and gradient on the whole training dataset.
         # Combination of all batches on train dataset should be equal validation dataset
         for j, batch in enumerate(train_dataset):
 
-            delta_hess = SICOracle.hessian(batch, weight_names=weight_names, return_full_real_derivative=False,
-                            return_for_cubic_newton=True, outer_jacobian_strategy=jac_calc_strat, vectorize=vectorize)
-            delta_grad = SICOracle.gradient(batch, weight_names=weight_names, return_full_real_derivative=False,
+            delta_hess = SICOracle.hessian(batch, weight_names=weight_names, return_full_real_derivative=True,
+                            return_for_cubic_newton=False, outer_jacobian_strategy=jac_calc_strat, vectorize=vectorize)
+            delta_grad = SICOracle.gradient(batch, weight_names=weight_names, return_full_real_derivative=True,
                             strategy='reverse-mode', vectorize=False)
 
             with torch.no_grad():
@@ -201,7 +169,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
 
         with torch.no_grad():
             is_real = not torch.is_complex(hess)
-            shift_coef = 2 if is_real else 4
+            shift_coef = 2 if is_real else 4  # 2 - for real hessian and grad, 4 - for complex hessian and grad
 
             eigenvalues_hess, eigenvectors_hess = torch.linalg.eigh(hess)
             del hess
@@ -214,21 +182,26 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
             del grad
 
             x = SICOracle.get_flat_params(name_list=weight_names)
+            param_num = x.numel()
             lipschitz_constant = 1.e-2
 
             while True:
                 delta, direction = find_delta(eigenvectors_hess, eigenvalues_hess, lipschitz_constant,
-                                                eigenvectors_gradient_product, shift_coef)
+                                              eigenvectors_gradient_product, shift_coef)
 
                 coef = -eigenvectors_gradient_product / (eigenvalues_hess + lipschitz_constant * delta / shift_coef)
                 lin_part = 2 * (coef.conj() * eigenvectors_gradient_product).sum()
                 quad_part = (eigenvalues_hess * coef.abs() ** 2).sum()
                 if is_real:
                     lin_part /= 2
+                    quad_part /= 2
 
                 cube_estimation = loss_val_train + lin_part + quad_part + lipschitz_constant * delta ** 3 / 6
 
-                curr_params = x + direction
+                step = direction
+                if step.numel() == 2 * param_num:
+                    step = step[:param_num] + 1j * step[param_num:]
+                curr_params = x + step
                 SICOracle.set_flat_params(curr_params, name_list=weight_names)
 
                 tmp_loss_val = accum_loss(train_dataset)
@@ -237,14 +210,14 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
                     lipschitz_constant *= 1.5
                 else:
                     break
-        
+
         # Track algorithm parameters
-        reg_param_curve.append(lipschitz_constant * delta / 4)
+        reg_param_curve.append(lipschitz_constant)
         loss_val_train = tmp_loss_val
         grad_norm_curve.append(grad_norm)
         weights_norm_curve.append(torch.norm(curr_params).item())
 
-        # Track NMSE values on validation and test dataset and save gradient, model parameters norm and 
+        # Track NMSE values on validation and test dataset and save gradient, model parameters norm and
         # algorithm regularization history
         with torch.no_grad():
             criterion_val_train = quality_criterion(model, train_dataset)
@@ -252,6 +225,7 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
             criterion_val_test = quality_criterion(model, test_dataset)
             loss_val_validate = accum_loss(validate_dataset)
             criterion_val_validate = quality_criterion(model, validate_dataset)
+            compute_time_curve.append(time.perf_counter() - compute_start)
 
             learning_curve_test.append(loss_val_test)
             learning_curve_train.append(loss_val_train)
@@ -273,17 +247,18 @@ def train_cubic_newton(model: nn.Module, train_dataset: DataLoaderType, validate
                 np.save(save_path + f'grad_norm{exp_name}.npy', np.array(grad_norm_curve))
                 np.save(save_path + f'param_norm{exp_name}.npy', np.array(weights_norm_curve))
                 np.save(save_path + f'regular{exp_name}.npy', np.array(reg_param_curve))
+                np.save(save_path + f'compute_time{exp_name}.npy', np.array(compute_time_curve))
         timer.__exit__()
         if epoch % print_every == 0:
             print(f"Epoch is {epoch + 1}, " + \
                 f"loss_train = {loss_val_train:.8f}, " + \
-                f"quality_criterion_train = {criterion_val_train:.8f}, stepsize = {mu:.6e}, " + \
+                f"quality_criterion_train = {criterion_val_train:.8f}, " + \
                 f"|grad| = {grad_norm:.4e}, time elapsed: {timer.interval:.2e}, " + \
-                f"regular param = {reg_param_curve[-1]:.4e}, " + \
-                f"Hessian conditioning: {hess_cond:.4e}")
+                f"Hessian conditioning: {hess_cond:.4e}, lambda_min = {lambda_min:.4e}, " + \
+                f"L = {lipschitz_constant:.4e}, delta = {float(delta):.4e}")
         epoch += 1
 
-        general_timer.__exit__()
-        print(f"Total time elapsed: {general_timer.interval} s")
+    general_timer.__exit__()
+    print(f"Total time elapsed: {general_timer.interval} s")
 
     return learning_curve_test, best_criterion_test
